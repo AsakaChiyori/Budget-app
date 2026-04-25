@@ -93,10 +93,11 @@ body{
 .t-exp{font-size:15px;font-weight:600;color:var(--red);}
 /* DATE GROUP */
 .dg-hdr{padding:7px 16px 3px;background:var(--gray6);font-size:13px;font-weight:600;color:var(--gray);border-bottom:.5px solid var(--gray5);}
-/* FAB WRAPPER */
-#fab-wrap{position:fixed;bottom:calc(var(--tab-h)+16px);left:0;right:0;max-width:430px;margin:0 auto;pointer-events:none;z-index:90;height:56px;}
-.fab{position:absolute;right:16px;bottom:0;pointer-events:auto;width:56px;height:56px;border-radius:28px;background:var(--blue);color:#fff;border:none;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(0,122,255,.4);display:flex;align-items:center;justify-content:center;transition:transform .12s;font-family:inherit;}
+/* FAB — JS 動態設定實際位置，CSS 先給安全預設值 */
+.fab{position:fixed;bottom:110px;right:20px;width:56px;height:56px;border-radius:28px;background:var(--blue);color:#fff;border:none;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(0,122,255,.4);display:flex;align-items:center;justify-content:center;transition:transform .12s;font-family:inherit;z-index:999;}
 .fab:active{transform:scale(.93);}
+/* Refresh button */
+.refresh-btn{background:none;border:none;color:var(--blue);font-size:14px;cursor:pointer;font-family:inherit;padding:4px 0 6px;}
 /* MODAL */
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-end;}
 .ov.on{display:flex;}
@@ -182,7 +183,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 
 <!-- ═══════════ OVERVIEW ═══════════ -->
 <div id="pg-overview" class="page on">
-  <div class="hdr"><h1>總覽</h1></div>
+  <div class="hdr">
+    <h1>總覽</h1>
+    <button class="refresh-btn" id="refresh-btn" onclick="autoUpdate()">↻ 更新</button>
+  </div>
 
   <!-- Total assets hero (all-time) -->
   <div class="hero">
@@ -202,6 +206,9 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
         <div class="hb-label">投資市值</div>
         <div class="hb-val" id="ov-t-inv">$0</div>
       </div>
+    </div>
+    <div id="ov-update-time" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;opacity:.55;text-align:center;">
+      股價/匯率：尚未更新
     </div>
   </div>
 
@@ -357,9 +364,8 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 </nav>
 
-<div id="fab-wrap">
-  <button class="fab" onclick="openAdd()">＋</button>
-</div>
+<!-- FAB: 直接 fixed，JS 設定精確位置 -->
+<button class="fab" id="fab" onclick="openAdd()">＋</button>
 
 <!-- ═══════════ GENERAL MODAL ═══════════ -->
 <div class="ov" id="genModal">
@@ -684,6 +690,10 @@ function renderOv(){
   el('ov-t-gen').textContent = fmt(genNet);
   el('ov-t-inv').textContent = fmt(invMv);
   el('ov-t-fx').textContent  = fmt(fxTwdV);
+
+  // 最後更新時間
+  const utEl = document.getElementById('ov-update-time');
+  if (utEl) utEl.textContent = `股價：${fmtLU('prices')}　匯率：${fmtLU('rates')}`;
 
   // Period stats
   const txs=D.gen.filter(inOvPeriod);
@@ -1036,10 +1046,153 @@ function todayStr(){ return new Date().toISOString().split('T')[0]; }
 function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2000); }
 document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('on'); }); });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FAB 精確定位（JS 計算，避免 CSS env() 相容問題）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function adjustFab() {
+  const fab = document.getElementById('fab');
+  const tb  = document.querySelector('.tabbar');
+  if (!fab || !tb) return;
+  // 底部距離 = tabbar 實際高度 + 16px 間距
+  fab.style.bottom = (tb.offsetHeight + 16) + 'px';
+  // 右側距離：在桌機寬螢幕下讓按鈕保持在 app 容器內
+  const appW = Math.min(430, window.innerWidth);
+  fab.style.right = Math.max(16, (window.innerWidth - appW) / 2 + 16) + 'px';
+}
+window.addEventListener('resize', adjustFab);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 自動抓取匯率 & 股價
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let _updating = false;
+
+async function autoUpdate() {
+  if (_updating) return;
+  _updating = true;
+  const btn = document.getElementById('refresh-btn');
+  if (btn) { btn.textContent = '更新中…'; btn.disabled = true; }
+
+  await Promise.allSettled([ fetchRates(), fetchPrices() ]);
+
+  _updating = false;
+  if (btn) { btn.textContent = '↻ 更新'; btn.disabled = false; }
+
+  // 重新渲染目前頁面
+  if (curPage === 'overview') renderOv();
+  if (curPage === 'fx')       renderFx();
+  if (curPage === 'invest')   renderInv();
+}
+
+// ── 匯率（exchangerate-api.com，免費、CORS 友善）──────────────
+async function fetchRates() {
+  try {
+    const r = await ft('https://api.exchangerate-api.com/v4/latest/TWD');
+    const d = await r.json();
+    // d.rates[cur] = 幾單位外幣 = 1 TWD → 1 外幣 = 1/d.rates[cur] TWD
+    let n = 0;
+    Object.keys(D.fxRates).forEach(cur => {
+      if (d.rates?.[cur] && d.rates[cur] > 0) {
+        D.fxRates[cur] = Math.round(100000 / d.rates[cur]) / 100000;
+        n++;
+      }
+    });
+    if (n > 0) { setLU('rates'); save(); toast('匯率已更新'); }
+  } catch(e) {
+    console.warn('匯率更新失敗', e);
+    toast('匯率更新失敗，請稍後再試');
+  }
+}
+
+// ── 股價（Yahoo Finance，支援台股 .TW 及美股/ETF）─────────────
+async function fetchPrices() {
+  try {
+    const holds = calcInvHolds();
+    if (Object.keys(holds).length === 0) return;
+
+    let n = 0;
+    for (const h of Object.values(holds)) {
+      try {
+        const sym   = toYahooSym(h.item, h.cat);
+        const price = await getYahooPrice(sym);
+        if (price !== null) {
+          D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
+          n++;
+        }
+      } catch(e) { /* 單一股票失敗不影響其他 */ }
+    }
+    if (n > 0) { setLU('prices'); save(); toast(`股價已更新 ${n} 檔`); }
+    else toast('股價未能取得（非交易時段或 API 限制）');
+  } catch(e) {
+    console.warn('股價更新失敗', e);
+  }
+}
+
+// 從 item 字串取出代號，依市場加上 Yahoo 後綴
+// "2330 台積電" → "2330.TW"；"VOO" → "VOO"；"00878 ..." → "00878.TW"
+function toYahooSym(item, cat) {
+  const tk = (item.match(/^([A-Za-z0-9]+)/)?.[1] || item.split(' ')[0]).toUpperCase();
+  return (cat === '台股' || (cat === 'ETF' && /^\d+$/.test(tk))) ? tk + '.TW' : tk;
+}
+
+async function getYahooPrice(symbol) {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  const r = await ft(url);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+  return (p !== undefined && p !== null) ? Math.round(p * 100) / 100 : null;
+}
+
+// 帶 timeout 的 fetch（預設 8 秒）
+function ft(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+
+// 記錄最後更新時間
+function setLU(type) {
+  if (!D.lastUpdate) D.lastUpdate = {};
+  D.lastUpdate[type] = new Date().toISOString();
+}
+
+// 格式化最後更新時間
+function fmtLU(type) {
+  const iso = D.lastUpdate?.[type];
+  if (!iso) return '尚未更新';
+  return new Date(iso).toLocaleString('zh-TW',
+    { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
 // ── BOOT ──────────────────────────────────────────────────────
 load();
 ovUpdateLbl(); genUpdateLbl(); fxUpdateLbl();
 renderOv(); renderGen(); renderFx(); renderInv();
+
+// 調整 FAB 位置（DOM 載入後）
+requestAnimationFrame(() => {
+  adjustFab();
+  // 更新總覽的最後更新時間顯示
+  const utEl = document.getElementById('ov-update-time');
+  if (utEl) {
+    const p = fmtLU('prices'), r = fmtLU('rates');
+    utEl.textContent = `股價：${p}　匯率：${r}`;
+  }
+});
+
+// 若上次更新超過 1 小時（或從未更新），自動靜默更新
+const stale = !D.lastUpdate?.rates ||
+  (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
+if (stale) autoUpdate();
+
+// PWA 從背景切回前台時重新檢查
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    const old = !D.lastUpdate?.rates ||
+      (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
+    if (old) autoUpdate();
+  }
+});
 </script>
 
 <!-- Service Worker 註冊（離線支援）-->
