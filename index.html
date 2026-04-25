@@ -1121,7 +1121,7 @@ async function fetchPrices() {
       } catch(e) { /* 單一股票失敗不影響其他 */ }
     }
     if (n > 0) { setLU('prices'); save(); toast(`股價已更新 ${n} 檔`); }
-    else toast('股價未能取得（非交易時段或 API 限制）');
+    else toast('股價取得失敗，請稍後再試');
   } catch(e) {
     console.warn('股價更新失敗', e);
   }
@@ -1135,12 +1135,35 @@ function toYahooSym(item, cat) {
 }
 
 async function getYahooPrice(symbol) {
+  // Yahoo Finance 回傳最近一次成交價（含非交易時段的收盤價），並非限定交易時段
   const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
-  const r = await ft(url);
-  if (!r.ok) return null;
-  const d = await r.json();
-  const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-  return (p !== undefined && p !== null) ? Math.round(p * 100) / 100 : null;
+
+  // ① 直接呼叫（若 CORS 未被擋則最快）
+  try {
+    const r = await ft(url);
+    if (r.ok) {
+      const d = await r.json();
+      const meta = d?.chart?.result?.[0]?.meta;
+      // regularMarketPrice：盤中即時價；chartPreviousClose：前一收盤（備援）
+      const p = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? null;
+      if (p != null) return Math.round(p * 100) / 100;
+    }
+  } catch(e) { /* CORS 被擋，改用 Proxy */ }
+
+  // ② CORS Proxy 備援（allorigins.win 免費公開代理）
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r2 = await ft(proxyUrl, 12000);
+    if (r2.ok) {
+      const wrapper = await r2.json();
+      const d = JSON.parse(wrapper.contents);
+      const meta = d?.chart?.result?.[0]?.meta;
+      const p = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? null;
+      if (p != null) return Math.round(p * 100) / 100;
+    }
+  } catch(e) { /* proxy 也失敗 */ }
+
+  return null;
 }
 
 // 帶 timeout 的 fetch（預設 8 秒）
