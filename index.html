@@ -626,7 +626,7 @@ const firebaseConfig = {
   appId:             "1:873874476986:web:1b30a265c850b6e8641783"
 };
 
-const FB_READY = firebaseConfig.apiKey !== "AIzaSyBHUA4c3lu_vTcCQf0l2MOCMUpGX4fh1QQ";
+const FB_READY = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 let db, auth;
 if (FB_READY) {
   firebase.initializeApp(firebaseConfig);
