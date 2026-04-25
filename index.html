@@ -522,6 +522,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="frow"><label class="flabel">單價</label><input type="number" class="finput" id="i-price" placeholder="0.00" min="0" step="0.01"></div>
       <div class="frow"><label class="flabel">手續費</label><input type="number" class="finput" id="i-fee" placeholder="0" min="0"></div>
       <div class="frow"><label class="flabel">現價（選填）</label><input type="number" class="finput" id="i-cur" placeholder="留空同買入價" min="0" step="0.01"></div>
+      <div class="frow" id="i-bank-row">
+        <label class="flabel">扣款帳戶<span style="font-size:11px;color:var(--gray)">（選填）</span></label>
+        <select class="finput" id="i-bank"><option value="">不連動</option></select>
+      </div>
     </div></div>
     <div id="invModal-del" style="display:none;padding:0 16px;">
       <button onclick="delEditTx('inv')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此交易</button>
@@ -686,11 +690,12 @@ async function initFirebase() {
   if (snap.exists) {
     D = snap.data();
     // 相容性補齊（防止舊版本缺欄位）
-    if (!D.cats)    D.cats    = {acct:['現金','銀行存款'],item:['飲食','其他'],inv:['台股','其他']};
+    if (!D.cats)    D.cats    = {acct:['現金','銀行存款'],item:['飲食','其他'],inv:['台股','基金','其他']};
     if (!D.fxRates) D.fxRates = {JPY:0.218,USD:32.5,EUR:36.2};
     if (!D.gen)     D.gen     = [];
     if (!D.inv)     D.inv     = [];
     if (!D.fx)      D.fx      = [];
+    if (!D.cats.inv.includes('基金')){ const oi=D.cats.inv.indexOf('其他'); if(oi>=0)D.cats.inv.splice(oi,0,'基金'); else D.cats.inv.push('基金'); save(); }
   } else {
     seed(); // 第一次使用，建立範例資料並存入 Firestore
   }
@@ -841,8 +846,8 @@ function renderOv(){
   const utEl = document.getElementById('ov-update-time');
   if (utEl) utEl.textContent = `股價：${fmtLU('prices')}　匯率：${fmtLU('rates')}`;
 
-  // Period stats
-  const txs=D.gen.filter(inOvPeriod);
+  // Period stats（排除投資轉帳連動記錄）
+  const txs=D.gen.filter(t=>inOvPeriod(t)&&!t.linked);
   let ti=0,te=0;
   txs.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
   const bal=ti-te;
@@ -898,7 +903,7 @@ function renderGen(){
   if(genFilter!=='all') txs=txs.filter(t=>t.itype===genFilter||t.etype===genFilter);
   txs.sort((a,b)=>b.date.localeCompare(a.date));
   let ti=0,te=0;
-  txs.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
+  txs.forEach(t=>{ if(t.linked)return; const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
   const bal=ti-te;
   el('gen-inc').textContent=fmt(ti); el('gen-exp').textContent=fmt(te);
   const balEl=el('gen-bal'); balEl.textContent=sign(bal)+fmt(bal); balEl.style.color=bal>=0?'var(--green)':'var(--red)';
@@ -917,7 +922,11 @@ function renderGen(){
       else if(i>0) amt=`<div class="t-inc">+${fmt(i)}</div>`;
       else if(e>0) amt=`<div class="t-exp">−${fmt(e)}</div>`;
       const sub=[t.cat,t.itype?'收：'+t.itype:'',t.etype?'支：'+t.etype:''].filter(Boolean).join(' · ');
-      html+=`<div class="tx" onclick="openEditGen(${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+      if(t.linked){
+        html+=`<div class="tx" style="opacity:.6;cursor:default"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:#EEF2FF;color:#4F46E5;border-radius:4px;padding:1px 5px;margin-right:4px;">投資轉帳</span>${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+      } else {
+        html+=`<div class="tx" onclick="openEditGen(${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+      }
     });
   });
   listEl.innerHTML=html;
@@ -1086,7 +1095,11 @@ function delEditTx(type){
   const id=_editId; _editId=null;
   if(type==='gen'){ D.gen=D.gen.filter(t=>t.id!==id); closeOv('genModal'); renderGen(); }
   else if(type==='fx'){ D.fx=D.fx.filter(t=>t.id!==id); closeOv('fxModal'); renderFx(); }
-  else if(type==='inv'){ D.inv=D.inv.filter(t=>t.id!==id); closeOv('invModal'); renderInv(); }
+  else if(type==='inv'){
+    const tx=D.inv.find(t=>t.id===id);
+    if(tx&&tx.linkedGenId) D.gen=D.gen.filter(t=>t.id!==tx.linkedGenId);
+    D.inv=D.inv.filter(t=>t.id!==id); closeOv('invModal'); renderInv(); renderGen();
+  }
   save(); toast('已刪除');
 }
 
@@ -1113,6 +1126,7 @@ function fillSelects(){
   el('g-inc-type').innerHTML=ao; el('g-exp-type').innerHTML=ao;
   el('i-cat').innerHTML='<option value="">選擇種類</option>'+D.cats.inv.map(c=>`<option value="${c}">${c}</option>`).join('');
   el('fx-cur').innerHTML=Object.keys(D.fxRates).map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('i-bank').innerHTML='<option value="">不連動</option>'+D.cats.acct.map(c=>`<option value="${c}">${c}</option>`).join('');
 }
 function saveGen(){
   const date=v('g-date'),item=v('g-item').trim(),cat=v('g-cat'),itype=v('g-inc-type'),etype=v('g-exp-type'),inc=+v('g-inc')||0,exp=+v('g-exp')||0;
@@ -1202,12 +1216,14 @@ function openInvModal(){
   el('invModal-title').textContent='新增投資'; el('invModal-del').style.display='none';
   el('i-date').value=todayStr();
   ['i-item','i-ticker','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
-  fillSelects(); el('invModal').classList.add('on'); syncFab();
+  fillSelects(); el('i-bank').value=''; el('i-bank-row').style.display='';
+  el('invModal').classList.add('on'); syncFab();
 }
 function openEditInv(id){
   const t=D.inv.find(x=>x.id===id); if(!t)return;
   _editId=id;
   el('invModal-title').textContent='編輯投資'; el('invModal-del').style.display='block';
+  el('i-bank-row').style.display='none';
   fillSelects();
   el('i-date').value=t.date; el('i-item').value=t.item; el('i-ticker').value=t.ticker||'';
   el('i-cat').value=t.cat||''; el('i-bs').value=t.bs;
@@ -1225,11 +1241,22 @@ function saveInv(){
   if(price<=0){toast('請填寫單價');return;}
   if(_editId!==null){
     const idx=D.inv.findIndex(t=>t.id===_editId);
-    if(idx>=0) D.inv[idx]={id:_editId,date,item,ticker,cat,bs,qty,price,fee,cur};
+    if(idx>=0) D.inv[idx]={...D.inv[idx],date,item,ticker,cat,bs,qty,price,fee,cur};
     _editId=null; save(); closeOv('invModal'); renderInv(); toast('已更新投資');
   } else {
-    D.inv.push({id:Date.now(),date,item,ticker,cat,bs,qty,price,fee,cur});
-    save(); closeOv('invModal'); renderInv(); toast('已新增投資');
+    const invId=Date.now();
+    const newInv={id:invId,date,item,ticker,cat,bs,qty,price,fee,cur};
+    const bankAcct=v('i-bank');
+    if(bankAcct){
+      const totalAmt=bs==='買'?qty*price+fee:Math.max(0,qty*price-fee);
+      const linkedId=invId+1;
+      newInv.linkedGenId=linkedId;
+      D.gen.push({id:linkedId,date,item:(bs==='買'?'買入':'賣出')+' '+item,cat:'投資',
+        itype:bs==='賣'?bankAcct:'',inc:bs==='賣'?totalAmt:0,
+        etype:bs==='買'?bankAcct:'',exp:bs==='買'?totalAmt:0,linked:'inv'});
+    }
+    D.inv.push(newInv);
+    save(); closeOv('invModal'); renderInv(); if(bankAcct)renderGen(); toast('已新增投資');
   }
 }
 
@@ -1260,7 +1287,7 @@ function v(id){ return document.getElementById(id).value; }
 function el(id){ return document.getElementById(id); }
 function syncFab(){ const f=document.getElementById('fab'); if(f) f.style.visibility=document.querySelector('.ov.on')?'hidden':''; }
 function closeOv(id){ document.getElementById(id).classList.remove('on'); syncFab(); }
-function todayStr(){ return new Date().toISOString().split('T')[0]; }
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2000); }
 document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this){ this.classList.remove('on'); syncFab(); } }); });
 
