@@ -823,7 +823,6 @@ function renderOv(){
   // 帳戶分佈：各帳戶全時段淨餘額
   const acctBal={};
   D.gen.forEach(t=>{
-    if(t.linked)return;
     const{ni,ne}=netOf(t);
     if(t.itype&&ni>0) acctBal[t.itype]=(acctBal[t.itype]||0)+ni;
     if(t.etype&&ne>0) acctBal[t.etype]=(acctBal[t.etype]||0)-ne;
