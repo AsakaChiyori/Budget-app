@@ -495,7 +495,12 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     </div>
     <div class="fsec"><div class="fcard">
       <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="i-date"></div>
-      <div class="frow"><label class="flabel">代碼/名稱</label><input type="text" class="finput" id="i-item" placeholder="例：2330 台積電"></div>
+      <div class="frow"><label class="flabel">名稱</label><input type="text" class="finput" id="i-item" placeholder="例：元大台灣50、VOO"></div>
+      <div class="frow">
+        <label class="flabel">股票代號</label>
+        <input type="text" class="finput" id="i-ticker" placeholder="例：0050、VOO（用於抓股價）"
+               oninput="this.value=this.value.toUpperCase()">
+      </div>
       <div class="frow"><label class="flabel">種類</label><select class="finput" id="i-cat"></select></div>
       <div class="frow"><label class="flabel">買/賣</label>
         <select class="finput" id="i-bs"><option value="買">買入</option><option value="賣">賣出</option></select>
@@ -881,7 +886,7 @@ function renderFx(){
 function calcInvHolds(){
   const h={};
   [...D.inv].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
-    if(!h[t.item]) h[t.item]={item:t.item,cat:t.cat,qty:0,cost:0,cur:+t.price};
+    if(!h[t.item]) h[t.item]={item:t.item,cat:t.cat,ticker:t.ticker||'',qty:0,cost:0,cur:+t.price};
     const q=+t.qty||0,p=+t.price||0,f=+t.fee||0;
     if(t.bs==='買'){ h[t.item].qty+=q; h[t.item].cost+=q*p+f; }
     else{ const avg=h[t.item].qty>0?h[t.item].cost/h[t.item].qty:p; h[t.item].cost-=q*avg+f; h[t.item].qty-=q; }
@@ -913,7 +918,11 @@ function renderInv(){
     <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">總成本</span><span style="font-size:15px;">${fmt(tc)}</span></div>
     <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">未實現損益</span><span style="font-size:15px;font-weight:700;color:${pnl>=0?'var(--red)':'var(--green)'}">${sign(pnl)}${fmt(pnl)}&nbsp;(${sign(pct)}${pct.toFixed(2)}%)</span></div>
     <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">累計手續費</span><span style="font-size:14px;color:var(--gray)">${fmt(tf)}</span></div>`;
-  el('inv-hold').innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':Object.values(holds).map(h=>`<div class="inv-row"><div class="inv-name"><div class="inv-title">${h.item}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`).join('');
+  el('inv-hold').innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':Object.values(holds).map(h=>{
+    const sym=toYahooSym(h.item,h.cat,h.ticker);
+    const tickerTag=`<span style="font-size:11px;background:#F0F0FF;color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${sym}</span>`;
+    return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
+  }).join('');
   const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
   el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="delTx('inv',${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
 }
@@ -1004,15 +1013,18 @@ function delCurrency(cur){
 // ── INVEST MODAL ──────────────────────────────────────────────
 function openInvModal(){
   el('i-date').value=todayStr();
-  ['i-item','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
+  ['i-item','i-ticker','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
   fillSelects(); el('invModal').classList.add('on');
 }
 function saveInv(){
-  const date=v('i-date'),item=v('i-item').trim(),cat=v('i-cat'),bs=v('i-bs'),qty=+v('i-qty')||0,price=+v('i-price')||0,fee=+v('i-fee')||0,cur=+v('i-cur')||price;
-  if(!date||!item){toast('請填寫日期和代碼/名稱');return;}
+  const date=v('i-date'),item=v('i-item').trim();
+  const ticker=v('i-ticker').trim().toUpperCase();
+  const cat=v('i-cat'),bs=v('i-bs');
+  const qty=+v('i-qty')||0,price=+v('i-price')||0,fee=+v('i-fee')||0,cur=+v('i-cur')||price;
+  if(!date||!item){toast('請填寫日期和名稱');return;}
   if(qty<=0){toast('請填寫數量');return;}
   if(price<=0){toast('請填寫單價');return;}
-  D.inv.push({id:Date.now(),date,item,cat,bs,qty,price,fee,cur});
+  D.inv.push({id:Date.now(),date,item,ticker,cat,bs,qty,price,fee,cur});
   save(); closeOv('invModal'); renderInv(); toast('已新增投資');
 }
 
@@ -1112,7 +1124,7 @@ async function fetchPrices() {
     let n = 0;
     for (const h of Object.values(holds)) {
       try {
-        const sym   = toYahooSym(h.item, h.cat);
+        const sym   = toYahooSym(h.item, h.cat, h.ticker);
         const price = await getYahooPrice(sym);
         if (price !== null) {
           D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
@@ -1127,10 +1139,10 @@ async function fetchPrices() {
   }
 }
 
-// 從 item 字串取出代號，依市場加上 Yahoo 後綴
-// "2330 台積電" → "2330.TW"；"VOO" → "VOO"；"00878 ..." → "00878.TW"
-function toYahooSym(item, cat) {
-  const tk = (item.match(/^([A-Za-z0-9]+)/)?.[1] || item.split(' ')[0]).toUpperCase();
+// 取得 Yahoo Finance 代號
+// 優先用 ticker 欄位；沒有的話才從 item 名稱開頭萃取
+function toYahooSym(item, cat, ticker) {
+  const tk = (ticker || item.match(/^([A-Za-z0-9]+)/)?.[1] || item.split(' ')[0]).toUpperCase();
   return (cat === '台股' || (cat === 'ETF' && /^\d+$/.test(tk))) ? tk + '.TW' : tk;
 }
 

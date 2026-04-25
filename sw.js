@@ -1,5 +1,5 @@
 // Service Worker — 讓 App 可離線使用
-const CACHE = 'budget-app-v3';
+const CACHE = 'budget-app-v4';
 const FILES = [
   './index.html',
   './manifest.json',
