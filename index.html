@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>記帳工具</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="記帳">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#F2F2F7">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --blue:#007AFF;--green:#34C759;--red:#FF3B30;--orange:#FF9500;--purple:#AF52DE;
+  --gray:#8E8E93;--gray2:#AEAEB2;--gray3:#C7C7CC;
+  --gray4:#D1D1D6;--gray5:#E5E5EA;--gray6:#F2F2F7;
+  --card:#FFFFFF;
+  /* 底部安全區域（Home Bar）高度 */
+  --sab: env(safe-area-inset-bottom, 20px);
+  /* Tab bar 總高度 = 內容區 63px + 底部安全區域 */
+  --tab-h: calc(63px + env(safe-area-inset-bottom, 20px));
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+  background:var(--gray6);max-width:430px;margin:0 auto;
+  min-height:100vh;overflow-x:hidden;position:relative;
+}
+/* HEADER — 頂部安全區域（瀏海/動態島）*/
+.hdr{
+  background:rgba(242,242,247,.95);backdrop-filter:blur(10px);
+  position:sticky;top:0;z-index:100;
+  padding:calc(14px + env(safe-area-inset-top, 0px)) 20px 10px;
+  border-bottom:.5px solid var(--gray4);
+  display:flex;align-items:flex-end;justify-content:space-between;
+}
+.hdr h1{font-size:34px;font-weight:700;letter-spacing:-.5px;}
+.hdr-action{font-size:14px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:inherit;padding:4px 0 6px;}
+/* TAB BAR */
+.tabbar{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:430px;
+  background:rgba(242,242,247,.95);backdrop-filter:blur(10px);
+  border-top:.5px solid var(--gray4);
+  display:flex;height:var(--tab-h);
+  padding-bottom:env(safe-area-inset-bottom,20px);z-index:100;
+}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--gray);transition:color .15s;padding-top:8px;}
+.tab.on{color:var(--blue);}
+.tab-ic{font-size:22px;line-height:1;}
+.tab-lb{font-size:10px;font-weight:500;}
+/* PAGE */
+.page{display:none;padding-bottom:calc(var(--tab-h)+24px);min-height:100vh;}
+.page.on{display:block;}
+/* SECTION */
+.sec{margin:16px 16px 0;}
+.sec-title{font-size:13px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-left:4px;}
+/* CARD */
+.card{background:var(--card);border-radius:12px;overflow:hidden;}
+.crow{display:flex;align-items:center;padding:12px 16px;border-bottom:.5px solid var(--gray5);min-height:44px;}
+.crow:last-child{border-bottom:none;}
+/* SUMMARY GRID */
+.sg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.sc{background:var(--card);border-radius:12px;padding:12px 8px;text-align:center;}
+.sc-lb{font-size:11px;color:var(--gray);margin-bottom:4px;}
+.sc-val{font-size:16px;font-weight:700;letter-spacing:-.3px;}
+/* HERO */
+.hero{
+  background:linear-gradient(135deg,#1C1C1E,#3A3A3C);
+  border-radius:16px;padding:22px 20px;color:#fff;
+  text-align:center;margin:16px 16px 0;
+}
+.hero-lb{font-size:13px;opacity:.7;margin-bottom:4px;}
+.hero-val{font-size:40px;font-weight:700;letter-spacing:-1px;}
+.hero-sub{font-size:12px;opacity:.6;margin-top:6px;}
+.hero-breakdown{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.15);}
+.hb-item{text-align:center;}
+.hb-label{font-size:11px;opacity:.6;margin-bottom:3px;}
+.hb-val{font-size:14px;font-weight:600;}
+/* TX ROW */
+.tx{display:flex;align-items:center;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:10px;cursor:pointer;}
+.tx:last-child{border-bottom:none;}
+.tx:active{background:var(--gray6);}
+.tx-ic{width:36px;height:36px;border-radius:10px;background:var(--gray6);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.tx-main{flex:1;min-width:0;}
+.tx-name{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tx-sub{font-size:12px;color:var(--gray);margin-top:1px;}
+.tx-right{text-align:right;flex-shrink:0;}
+.t-inc{font-size:15px;font-weight:600;color:var(--green);}
+.t-exp{font-size:15px;font-weight:600;color:var(--red);}
+/* DATE GROUP */
+.dg-hdr{padding:7px 16px 3px;background:var(--gray6);font-size:13px;font-weight:600;color:var(--gray);border-bottom:.5px solid var(--gray5);}
+/* FAB WRAPPER */
+#fab-wrap{position:fixed;bottom:calc(var(--tab-h)+16px);left:0;right:0;max-width:430px;margin:0 auto;pointer-events:none;z-index:90;height:56px;}
+.fab{position:absolute;right:16px;bottom:0;pointer-events:auto;width:56px;height:56px;border-radius:28px;background:var(--blue);color:#fff;border:none;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(0,122,255,.4);display:flex;align-items:center;justify-content:center;transition:transform .12s;font-family:inherit;}
+.fab:active{transform:scale(.93);}
+/* MODAL */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-end;}
+.ov.on{display:flex;}
+.modal{background:var(--gray6);border-radius:20px 20px 0 0;width:100%;max-width:430px;margin:0 auto;max-height:90vh;overflow-y:auto;padding-bottom:44px;}
+.m-handle{width:36px;height:5px;background:var(--gray4);border-radius:3px;margin:10px auto 14px;}
+.m-hdr{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;}
+.m-title{font-size:17px;font-weight:600;}
+.m-btn{font-size:17px;color:var(--blue);background:none;border:none;cursor:pointer;padding:4px 0;font-family:inherit;}
+.m-btn.cancel{color:var(--gray);}
+/* FORM */
+.fsec{margin:10px 16px 0;}
+.fcard{background:#fff;border-radius:12px;overflow:hidden;}
+.frow{display:flex;align-items:center;padding:11px 16px;border-bottom:.5px solid var(--gray5);gap:12px;min-height:44px;}
+.frow:last-child{border-bottom:none;}
+.flabel{font-size:15px;white-space:nowrap;min-width:76px;}
+.finput{flex:1;border:none;outline:none;font-size:15px;text-align:right;background:transparent;color:#000;font-family:inherit;}
+.finput::placeholder{color:var(--gray3);}
+select.finput{-webkit-appearance:none;cursor:pointer;}
+/* SEGMENT */
+.seg{display:flex;background:var(--gray5);border-radius:9px;padding:2px;}
+.seg-btn{flex:1;padding:6px 4px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--gray);transition:all .15s;font-family:inherit;}
+.seg-btn.on{background:#fff;color:#000;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+/* PERIOD */
+.period{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0 4px;}
+.period-btn{background:none;border:none;font-size:22px;cursor:pointer;color:var(--blue);line-height:1;padding:4px 12px;}
+.period-lbl{font-size:17px;font-weight:600;min-width:120px;text-align:center;}
+/* SCROLL TABS */
+.stabs{display:flex;overflow-x:auto;gap:8px;scrollbar-width:none;padding:10px 16px;}
+.stabs::-webkit-scrollbar{display:none;}
+.stab{padding:6px 14px;border-radius:16px;font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;background:#fff;border:1.5px solid var(--gray4);color:var(--gray);flex-shrink:0;transition:all .15s;}
+.stab.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+/* INVEST ROWS */
+.inv-row{display:flex;align-items:flex-start;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:8px;cursor:pointer;}
+.inv-row:last-child{border-bottom:none;}
+.inv-row:active{background:var(--gray6);}
+.inv-name{flex:1;min-width:0;}
+.inv-title{font-size:15px;font-weight:600;}
+.inv-sub{font-size:12px;color:var(--gray);margin-top:2px;}
+.inv-pnl{text-align:right;flex-shrink:0;}
+.inv-val{font-size:15px;font-weight:700;}
+.inv-pct{font-size:12px;margin-top:1px;}
+.pos{color:var(--red);}
+.neg{color:var(--green);}
+.badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;}
+.b-buy{background:#FFE5E5;color:var(--red);}
+.b-sell{background:#E5F5EB;color:var(--green);}
+/* FX SPECIFIC */
+.fx-cur-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:700;background:#F0F0FF;color:var(--purple);margin-right:4px;}
+/* PROGRESS */
+.prog{height:5px;background:var(--gray5);border-radius:3px;overflow:hidden;margin:5px 0 2px;}
+.prog-fill{height:100%;border-radius:3px;}
+/* CAT MODAL */
+.cat-item{display:flex;align-items:center;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:8px;}
+.cat-item:last-child{border-bottom:none;}
+.cat-nm{flex:1;font-size:15px;}
+.del-btn{color:var(--red);background:none;border:none;font-size:22px;cursor:pointer;line-height:1;padding:0 4px;flex-shrink:0;}
+/* INLINE ADD ROW */
+.add-row{display:flex;align-items:center;padding:10px 16px;background:#fff;border-radius:12px;margin-top:8px;}
+.add-input{flex:1;border:none;outline:none;font-size:15px;background:transparent;font-family:inherit;}
+.add-input::placeholder{color:var(--gray3);}
+.add-btn{color:var(--blue);background:none;border:none;font-size:22px;cursor:pointer;line-height:1;padding:0 0 0 8px;flex-shrink:0;}
+/* TOAST */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-90px);background:rgba(0,0,0,.82);color:#fff;padding:9px 18px;border-radius:20px;font-size:14px;z-index:999;transition:transform .25s;white-space:nowrap;pointer-events:none;}
+.toast.on{transform:translateX(-50%) translateY(0);}
+/* EMPTY STATE */
+.empty{text-align:center;padding:48px 20px;color:var(--gray);}
+.empty-ic{font-size:44px;margin-bottom:10px;}
+.empty-tx{font-size:15px;line-height:1.6;}
+/* INFO BANNER */
+.info-banner{background:#EAF4FF;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--blue);margin:8px 16px 0;line-height:1.5;}
+.warn-banner{background:#FFF5E5;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--orange);margin:8px 16px 0;line-height:1.5;}
+/* RATE ROW */
+.rate-row{display:flex;align-items:center;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:8px;}
+.rate-row:last-child{border-bottom:none;}
+.rate-cur{font-size:15px;font-weight:700;min-width:50px;}
+.rate-val{flex:1;border:none;outline:none;font-size:15px;background:transparent;text-align:right;font-family:inherit;}
+.rate-unit{font-size:13px;color:var(--gray);white-space:nowrap;}
+</style>
+</head>
+<body>
+<div id="app">
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════ OVERVIEW ═══════════ -->
+<div id="pg-overview" class="page on">
+  <div class="hdr"><h1>總覽</h1></div>
+
+  <!-- Total assets hero (all-time) -->
+  <div class="hero">
+    <div class="hero-lb">總資產（換算新台幣）</div>
+    <div class="hero-val" id="ov-total">$0</div>
+    <div class="hero-sub" id="ov-total-sub">—</div>
+    <div class="hero-breakdown">
+      <div class="hb-item">
+        <div class="hb-label">一般帳戶</div>
+        <div class="hb-val" id="ov-t-gen">$0</div>
+      </div>
+      <div class="hb-item">
+        <div class="hb-label">外幣帳戶</div>
+        <div class="hb-val" id="ov-t-fx">$0</div>
+      </div>
+      <div class="hb-item">
+        <div class="hb-label">投資市值</div>
+        <div class="hb-val" id="ov-t-inv">$0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Period selector for detail stats -->
+  <div class="sec" style="margin-top:14px;">
+    <div class="card" style="padding:10px 16px 8px;">
+      <div class="seg" id="ov-mode-seg">
+        <button class="seg-btn on" onclick="ovSetMode('month',this)">月</button>
+        <button class="seg-btn"    onclick="ovSetMode('year',this)">年</button>
+      </div>
+      <div class="period">
+        <button class="period-btn" onclick="ovMove(-1)">‹</button>
+        <div class="period-lbl" id="ov-lbl">2026年4月</div>
+        <button class="period-btn" onclick="ovMove(1)">›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">一般帳戶（本期）</div>
+    <div class="sg">
+      <div class="sc"><div class="sc-lb">收入</div><div class="sc-val" id="ov-inc" style="color:var(--green)">$0</div></div>
+      <div class="sc"><div class="sc-lb">支出</div><div class="sc-val" id="ov-exp" style="color:var(--red)">$0</div></div>
+      <div class="sc"><div class="sc-lb">結餘</div><div class="sc-val" id="ov-bal" style="color:var(--blue)">$0</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">帳戶分佈</div>
+    <div class="card" id="ov-acct"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">支出分類</div>
+    <div class="card" id="ov-cat"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">外幣持有</div>
+    <div class="card" id="ov-fx"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">投資帳戶</div>
+    <div class="card" id="ov-inv"></div>
+  </div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- ═══════════ GENERAL ═══════════ -->
+<div id="pg-general" class="page">
+  <div class="hdr">
+    <h1>一般</h1>
+    <button class="hdr-action" onclick="openCatMgr()">管理種類</button>
+  </div>
+  <div class="sec" style="margin-bottom:0;">
+    <div class="card" style="padding:10px 16px 8px;">
+      <div class="seg" id="gen-mode-seg">
+        <button class="seg-btn on" onclick="genSetMode('month',this)">月</button>
+        <button class="seg-btn"    onclick="genSetMode('year',this)">年</button>
+        <button class="seg-btn"    onclick="genSetMode('all',this)">全部</button>
+      </div>
+      <div class="period" id="gen-period-row">
+        <button class="period-btn" onclick="genMove(-1)">‹</button>
+        <div class="period-lbl" id="gen-lbl">2026年4月</div>
+        <button class="period-btn" onclick="genMove(1)">›</button>
+      </div>
+    </div>
+  </div>
+  <div class="stabs" id="gen-tabs"></div>
+  <div class="sec" style="margin-top:0;">
+    <div class="sg">
+      <div class="sc"><div class="sc-lb">收入</div><div class="sc-val" id="gen-inc" style="color:var(--green)">$0</div></div>
+      <div class="sc"><div class="sc-lb">支出</div><div class="sc-val" id="gen-exp" style="color:var(--red)">$0</div></div>
+      <div class="sc"><div class="sc-lb">結餘</div><div class="sc-val" id="gen-bal">$0</div></div>
+    </div>
+  </div>
+  <div class="sec" style="margin-top:10px;"><div class="card" id="gen-list"></div></div>
+  <div style="height:80px"></div>
+</div>
+
+<!-- ═══════════ FX ═══════════ -->
+<div id="pg-fx" class="page">
+  <div class="hdr">
+    <h1>外幣</h1>
+    <button class="hdr-action" onclick="openFxRateMgr()">匯率管理</button>
+  </div>
+
+  <div class="info-banner">💡 匯率目前為手動設定；正式版將與投資頁同步自動更新。</div>
+  <div id="fx-rate-warn" style="display:none;" class="warn-banner">⚠️ 部分幣別尚未設定匯率，換算結果可能不準確。</div>
+
+  <!-- Period filter -->
+  <div class="sec" style="margin-bottom:0;">
+    <div class="card" style="padding:10px 16px 8px;">
+      <div class="seg" id="fx-mode-seg">
+        <button class="seg-btn on" onclick="fxSetMode('month',this)">月</button>
+        <button class="seg-btn"    onclick="fxSetMode('year',this)">年</button>
+        <button class="seg-btn"    onclick="fxSetMode('all',this)">全部</button>
+      </div>
+      <div class="period" id="fx-period-row">
+        <button class="period-btn" onclick="fxMove(-1)">‹</button>
+        <div class="period-lbl" id="fx-lbl">2026年4月</div>
+        <button class="period-btn" onclick="fxMove(1)">›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FX holdings summary -->
+  <div class="sec">
+    <div class="sec-title">外幣持有總覽</div>
+    <div class="card" id="fx-holds"></div>
+  </div>
+
+  <!-- Filter tabs (all / cash / bank / by currency) -->
+  <div class="stabs" id="fx-tabs"></div>
+
+  <!-- Period summary -->
+  <div class="sec" style="margin-top:0;">
+    <div class="sg">
+      <div class="sc"><div class="sc-lb">買入(TWD)</div><div class="sc-val" id="fx-in"  style="color:var(--red)">$0</div></div>
+      <div class="sc"><div class="sc-lb">賣出(TWD)</div><div class="sc-val" id="fx-out" style="color:var(--green)">$0</div></div>
+      <div class="sc"><div class="sc-lb">現值(TWD)</div><div class="sc-val" id="fx-cur-val" style="color:var(--blue)">$0</div></div>
+    </div>
+  </div>
+
+  <div class="sec" style="margin-top:10px;"><div class="card" id="fx-list"></div></div>
+  <div style="height:80px"></div>
+</div>
+
+<!-- ═══════════ INVEST ═══════════ -->
+<div id="pg-invest" class="page">
+  <div class="hdr"><h1>投資</h1></div>
+  <div class="info-banner">💡 現價欄位目前為手動輸入；正式版將自動抓取每日收盤價及外幣匯率。</div>
+  <div class="sec"><div class="sec-title">投資組合</div><div class="card" id="inv-port"></div></div>
+  <div class="sec"><div class="sec-title">持倉明細</div><div class="card" id="inv-hold"></div></div>
+  <div class="sec"><div class="sec-title">交易紀錄</div><div class="card" id="inv-list"></div></div>
+  <div style="height:80px"></div>
+</div>
+
+<!-- ═══════════ TAB BAR ═══════════ -->
+<nav class="tabbar">
+  <div class="tab on" id="tab-overview" onclick="goPage('overview')">
+    <div class="tab-ic">📊</div><div class="tab-lb">總覽</div>
+  </div>
+  <div class="tab" id="tab-general" onclick="goPage('general')">
+    <div class="tab-ic">💳</div><div class="tab-lb">一般</div>
+  </div>
+  <div class="tab" id="tab-fx" onclick="goPage('fx')">
+    <div class="tab-ic">💱</div><div class="tab-lb">外幣</div>
+  </div>
+  <div class="tab" id="tab-invest" onclick="goPage('invest')">
+    <div class="tab-ic">📈</div><div class="tab-lb">投資</div>
+  </div>
+</nav>
+
+<div id="fab-wrap">
+  <button class="fab" onclick="openAdd()">＋</button>
+</div>
+
+<!-- ═══════════ GENERAL MODAL ═══════════ -->
+<div class="ov" id="genModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('genModal')">取消</button>
+      <div class="m-title">新增交易</div>
+      <button class="m-btn" onclick="saveGen()">儲存</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="g-date"></div>
+      <div class="frow"><label class="flabel">項目</label><input type="text" class="finput" id="g-item" placeholder="項目名稱"></div>
+      <div class="frow"><label class="flabel">項目種類</label><select class="finput" id="g-cat"></select></div>
+    </div></div>
+    <div class="fsec">
+      <div class="sec-title" style="margin-bottom:6px;padding-left:4px;">收入</div>
+      <div class="fcard">
+        <div class="frow"><label class="flabel">帳戶</label><select class="finput" id="g-inc-type"></select></div>
+        <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="g-inc" placeholder="0" min="0"></div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="sec-title" style="margin-bottom:6px;padding-left:4px;">支出</div>
+      <div class="fcard">
+        <div class="frow"><label class="flabel">帳戶</label><select class="finput" id="g-exp-type"></select></div>
+        <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="g-exp" placeholder="0" min="0"></div>
+      </div>
+    </div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ FX MODAL ═══════════ -->
+<div class="ov" id="fxModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('fxModal')">取消</button>
+      <div class="m-title">新增外幣交易</div>
+      <button class="m-btn" onclick="saveFx()">儲存</button>
+    </div>
+    <div class="fsec">
+      <div style="background:#F0F0FF;border-radius:10px;padding:9px 14px;font-size:12px;color:var(--purple);line-height:1.5;margin-bottom:0;">
+        例：用 20,000 TWD 買入 100,000 JPY → 選「買入」，外幣填 100000 JPY，台幣填 20000
+      </div>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="fx-date"></div>
+      <div class="frow"><label class="flabel">說明</label><input type="text" class="finput" id="fx-item" placeholder="例：買日幣備用"></div>
+      <div class="frow">
+        <label class="flabel">買/賣</label>
+        <select class="finput" id="fx-bs">
+          <option value="買">買入外幣（花台幣）</option>
+          <option value="賣">賣出/支出外幣</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">帳戶類型</label>
+        <select class="finput" id="fx-acct">
+          <option value="外幣現鈔">外幣現鈔</option>
+          <option value="外幣銀行帳戶">外幣銀行帳戶</option>
+        </select>
+      </div>
+    </div></div>
+    <div class="fsec">
+      <div class="sec-title" style="padding-left:4px;margin-bottom:6px;">外幣</div>
+      <div class="fcard">
+        <div class="frow"><label class="flabel">幣別</label><select class="finput" id="fx-cur"></select></div>
+        <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="fx-fx-amt" placeholder="外幣金額" min="0"></div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="sec-title" style="padding-left:4px;margin-bottom:6px;">台幣</div>
+      <div class="fcard">
+        <div class="frow">
+          <label class="flabel">金額（TWD）</label>
+          <input type="number" class="finput" id="fx-twd-amt" placeholder="台幣金額（可留空）" min="0">
+        </div>
+      </div>
+    </div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ FX RATE MANAGER ═══════════ -->
+<div class="ov" id="fxRateModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('fxRateModal')">關閉</button>
+      <div class="m-title">匯率管理</div>
+      <div style="width:44px"></div>
+    </div>
+    <div class="fsec">
+      <div class="info-banner" style="margin:0;">正式版將自動抓取當日匯率。此處可手動設定換算用匯率（1 外幣 = ? 新台幣）。</div>
+    </div>
+    <!-- Rate editing per currency -->
+    <div class="sec">
+      <div class="sec-title">現有幣別匯率</div>
+      <div class="fcard" id="rate-list"></div>
+    </div>
+    <!-- Add new currency -->
+    <div class="sec">
+      <div class="sec-title">新增幣別</div>
+      <div class="fcard">
+        <div class="frow">
+          <input class="finput" style="text-align:left;flex:1;" id="new-cur-code" placeholder="幣別代碼（例：EUR）" maxlength="5"
+                 oninput="this.value=this.value.toUpperCase()">
+          <input type="number" class="finput" style="flex:1;" id="new-cur-rate" placeholder="匯率" min="0" step="0.0001">
+          <button class="add-btn" onclick="addCurrency()">＋</button>
+        </div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ INVEST MODAL ═══════════ -->
+<div class="ov" id="invModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('invModal')">取消</button>
+      <div class="m-title">新增投資</div>
+      <button class="m-btn" onclick="saveInv()">儲存</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="i-date"></div>
+      <div class="frow"><label class="flabel">代碼/名稱</label><input type="text" class="finput" id="i-item" placeholder="例：2330 台積電"></div>
+      <div class="frow"><label class="flabel">種類</label><select class="finput" id="i-cat"></select></div>
+      <div class="frow"><label class="flabel">買/賣</label>
+        <select class="finput" id="i-bs"><option value="買">買入</option><option value="賣">賣出</option></select>
+      </div>
+      <div class="frow"><label class="flabel">數量</label><input type="number" class="finput" id="i-qty" placeholder="0" min="0"></div>
+      <div class="frow"><label class="flabel">單價</label><input type="number" class="finput" id="i-price" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="frow"><label class="flabel">手續費</label><input type="number" class="finput" id="i-fee" placeholder="0" min="0"></div>
+      <div class="frow"><label class="flabel">現價（選填）</label><input type="number" class="finput" id="i-cur" placeholder="留空同買入價" min="0" step="0.01"></div>
+    </div></div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ CATEGORY MANAGER ═══════════ -->
+<div class="ov" id="catModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('catModal')">關閉</button>
+      <div class="m-title">管理種類</div>
+      <div style="width:44px"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">帳戶種類</div>
+      <div style="background:#EAF4FF;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--blue);line-height:1.5;">同時用於「收入帳戶」與「支出帳戶」</div>
+      <div class="fcard" id="cl-acct"></div>
+      <div class="add-row" style="margin-top:8px;"><input class="add-input" id="ni-acct" placeholder="新增帳戶種類" onkeydown="if(event.key==='Enter')addCat('acct')"><button class="add-btn" onclick="addCat('acct')">＋</button></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">項目種類（支出分類）</div>
+      <div class="fcard" id="cl-item"></div>
+      <div class="add-row" style="margin-top:8px;"><input class="add-input" id="ni-item" placeholder="新增項目種類" onkeydown="if(event.key==='Enter')addCat('item')"><button class="add-btn" onclick="addCat('item')">＋</button></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">投資種類</div>
+      <div class="fcard" id="cl-inv"></div>
+      <div class="add-row" style="margin-top:8px;"><input class="add-input" id="ni-inv" placeholder="新增投資種類" onkeydown="if(event.key==='Enter')addCat('inv')"><button class="add-btn" onclick="addCat('inv')">＋</button></div>
+    </div>
+    <div style="height:16px"></div>
+  </div>
+</div>
+
+</div><!-- #app -->
+<script>
+'use strict';
+// ── DATA ─────────────────────────────────────────────────────
+const SK = 'acct_v3';
+let D = {
+  cats:{
+    acct:['現金','銀行存款','應收帳款(AR)','應付帳款(AP)'],
+    item:['飲食','交通','娛樂','購物','醫療','居住','薪資','其他'],
+    inv:['台股','美股','ETF','加密貨幣','其他']
+  },
+  // FX rates: { 'JPY': 0.218 }  meaning 1 JPY = 0.218 TWD
+  fxRates:{ JPY:0.218, USD:32.5, EUR:36.2, HKD:4.17, CNY:4.45 },
+  gen:[],
+  inv:[],
+  fx:[]
+};
+
+function load(){
+  const raw=localStorage.getItem(SK);
+  if(raw){try{D=JSON.parse(raw);}catch(e){}}
+  else seed();
+}
+function save(){ localStorage.setItem(SK,JSON.stringify(D)); }
+
+function seed(){
+  D.gen=[
+    {id:1,date:'2026-04-01',item:'薪資',        cat:'薪資',itype:'銀行存款',     inc:55000,etype:'',           exp:0    },
+    {id:2,date:'2026-04-05',item:'房租',        cat:'居住',itype:'',             inc:0,    etype:'銀行存款',    exp:18000},
+    {id:3,date:'2026-04-08',item:'午餐',        cat:'飲食',itype:'',             inc:0,    etype:'現金',        exp:120  },
+    {id:4,date:'2026-04-10',item:'超市採購',    cat:'購物',itype:'',             inc:0,    etype:'應付帳款(AP)',exp:1580 },
+    {id:5,date:'2026-04-15',item:'電影',        cat:'娛樂',itype:'',             inc:0,    etype:'應付帳款(AP)',exp:360  },
+    {id:6,date:'2026-04-20',item:'朋友聚餐代墊',cat:'飲食',itype:'現金',         inc:260,  etype:'應付帳款(AP)',exp:500  },
+    {id:7,date:'2026-04-22',item:'計程車',      cat:'交通',itype:'',             inc:0,    etype:'現金',        exp:250  },
+    {id:8,date:'2026-04-23',item:'咖啡',        cat:'飲食',itype:'',             inc:0,    etype:'現金',        exp:85   },
+    {id:9, date:'2026-03-01',item:'薪資',       cat:'薪資',itype:'銀行存款',     inc:55000,etype:'',           exp:0    },
+    {id:10,date:'2026-03-05',item:'房租',       cat:'居住',itype:'',             inc:0,    etype:'銀行存款',    exp:18000},
+    {id:11,date:'2026-03-12',item:'超市',       cat:'購物',itype:'',             inc:0,    etype:'應付帳款(AP)',exp:2100 },
+    {id:12,date:'2026-03-20',item:'加油',       cat:'交通',itype:'',             inc:0,    etype:'現金',        exp:800  },
+  ];
+  D.inv=[
+    {id:1,date:'2026-03-10',item:'2330 台積電',        cat:'台股',bs:'買',qty:1000,price:850, fee:1074,cur:920 },
+    {id:2,date:'2026-03-15',item:'VOO',                cat:'美股',bs:'買',qty:5,   price:520, fee:3,   cur:545 },
+    {id:3,date:'2026-04-01',item:'00878 國泰永續高股息',cat:'ETF', bs:'買',qty:5000,price:20.5,fee:730, cur:21.2},
+    {id:4,date:'2026-04-10',item:'2330 台積電',        cat:'台股',bs:'賣',qty:200, price:920, fee:427, cur:920 },
+  ];
+  D.fx=[
+    {id:1,date:'2026-04-10',item:'買日幣備用',      currency:'JPY',fxAmt:100000,twdAmt:20000,bs:'買',acctType:'外幣現鈔'   },
+    {id:2,date:'2026-04-12',item:'美金定存',        currency:'USD',fxAmt:500,   twdAmt:16250,bs:'買',acctType:'外幣銀行帳戶'},
+    {id:3,date:'2026-04-18',item:'日本旅遊花費',    currency:'JPY',fxAmt:25000, twdAmt:0,    bs:'賣',acctType:'外幣現鈔'   },
+    {id:4,date:'2026-04-22',item:'換港幣',          currency:'HKD',fxAmt:3000,  twdAmt:12500,bs:'買',acctType:'外幣現鈔'   },
+  ];
+  save();
+}
+
+// ── STATE ────────────────────────────────────────────────────
+let curPage='overview';
+let ovMode='month', ovY=2026, ovM=4;
+let genMode='month', genY=2026, genM=4, genFilter='all';
+let fxMode='month',  fxY=2026,  fxM=4,  fxFilter='all';
+
+// ── NAVIGATION ───────────────────────────────────────────────
+function goPage(p){
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
+  el('pg-'+p).classList.add('on');
+  el('tab-'+p).classList.add('on');
+  curPage=p;
+  if(p==='overview') renderOv();
+  if(p==='general')  renderGen();
+  if(p==='fx')       renderFx();
+  if(p==='invest')   renderInv();
+}
+function openAdd(){
+  if(curPage==='invest') openInvModal();
+  else if(curPage==='fx') openFxModal();
+  else openGenModal();
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function fmt(n,d=0){ return '$'+Math.abs(n).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtN(n,d=0){ return Math.abs(n).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function sign(n){ return n>=0?'+':''; }
+const WD=['日','一','二','三','四','五','六'];
+const ICONS={飲食:'🍽️',交通:'🚗',娛樂:'🎮',購物:'🛍️',醫療:'💊',居住:'🏠',薪資:'💰',教育:'📚',旅遊:'✈️',保險:'🛡️',其他:'📌'};
+function ico(cat){ return ICONS[cat]||'📌'; }
+
+function netOf(t){
+  const i=+t.inc||0, e=+t.exp||0;
+  if(i>0&&e>0){ const d=e-i; return d>0?{ni:0,ne:d}:d<0?{ni:-d,ne:0}:{ni:0,ne:0}; }
+  return{ni:i,ne:e};
+}
+function inOvPeriod(tx){ return ovMode==='month'?tx.date.startsWith(`${ovY}-${String(ovM).padStart(2,'0')}`):tx.date.startsWith(`${ovY}`); }
+function inGenPeriod(tx){ if(genMode==='all')return true; return genMode==='month'?tx.date.startsWith(`${genY}-${String(genM).padStart(2,'0')}`):tx.date.startsWith(`${genY}`); }
+function inFxPeriod(tx){ if(fxMode==='all')return true; return fxMode==='month'?tx.date.startsWith(`${fxY}-${String(fxM).padStart(2,'0')}`):tx.date.startsWith(`${fxY}`); }
+
+// FX: net holdings per currency per account type
+function calcFxHolds(){
+  const h={};
+  D.fx.forEach(t=>{
+    if(!h[t.currency]) h[t.currency]={cash:0,bank:0};
+    const amt= t.bs==='買' ? +t.fxAmt : -(+t.fxAmt);
+    if(t.acctType==='外幣現鈔') h[t.currency].cash+=amt;
+    else h[t.currency].bank+=amt;
+  });
+  return h;
+}
+function fxTwd(cur, amt){ return amt*(D.fxRates[cur]||0); }
+function totalFxTwd(){
+  const h=calcFxHolds();
+  return Object.entries(h).reduce((s,[cur,v])=>s+fxTwd(cur,(v.cash||0)+(v.bank||0)),0);
+}
+// All-time general net (for total assets)
+function genAllTimeNet(){
+  let ti=0,te=0;
+  D.gen.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
+  return ti-te;
+}
+// Investment total market value
+function invTotalMv(){
+  const h=calcInvHolds();
+  return Object.values(h).reduce((s,hh)=>s+hh.mv,0);
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────
+function ovSetMode(m,btn){
+  ovMode=m;
+  document.querySelectorAll('#ov-mode-seg .seg-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ovUpdateLbl(); renderOv();
+}
+function ovMove(d){
+  if(ovMode==='month'){ ovM+=d; if(ovM>12){ovM=1;ovY++;} if(ovM<1){ovM=12;ovY--;} }
+  else ovY+=d;
+  ovUpdateLbl(); renderOv();
+}
+function ovUpdateLbl(){ el('ov-lbl').textContent=ovMode==='month'?`${ovY}年${ovM}月`:`${ovY}年`; }
+
+function renderOv(){
+  ovUpdateLbl();
+
+  // Total assets
+  const genNet = genAllTimeNet();
+  const invMv  = invTotalMv();
+  const fxTwdV = totalFxTwd();
+  const total  = genNet + invMv + fxTwdV;
+
+  el('ov-total').textContent = fmt(total);
+  el('ov-total-sub').textContent = `更新：${new Date().toLocaleDateString('zh-TW')}`;
+  el('ov-t-gen').textContent = fmt(genNet);
+  el('ov-t-inv').textContent = fmt(invMv);
+  el('ov-t-fx').textContent  = fmt(fxTwdV);
+
+  // Period stats
+  const txs=D.gen.filter(inOvPeriod);
+  let ti=0,te=0;
+  txs.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
+  const bal=ti-te;
+  el('ov-inc').textContent=fmt(ti);
+  el('ov-exp').textContent=fmt(te);
+  const balEl=el('ov-bal');
+  balEl.textContent=sign(bal)+fmt(bal);
+  balEl.style.color=bal>=0?'var(--green)':'var(--red)';
+
+  // Account breakdown
+  const acct={};
+  txs.forEach(t=>{ const{ni,ne}=netOf(t); if(t.itype&&ni>0)acct[t.itype]=(acct[t.itype]||0)+ni; if(t.etype&&ne>0)acct[t.etype]=(acct[t.etype]||0)-ne; });
+  const acctEl=el('ov-acct');
+  const ak=Object.keys(acct);
+  acctEl.innerHTML=ak.length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">本期無資料</div>':ak.map(k=>`<div class="crow"><span style="flex:1;font-size:15px;">${k}</span><span style="font-weight:600;font-size:15px;color:${acct[k]>=0?'var(--green)':'var(--red)'}">${sign(acct[k])}${fmt(acct[k])}</span></div>`).join('');
+
+  // Category breakdown
+  const catMap={};
+  txs.forEach(t=>{ const{ne}=netOf(t); if(ne>0&&t.cat)catMap[t.cat]=(catMap[t.cat]||0)+ne; });
+  const catEl=el('ov-cat');
+  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const mx=cats[0]?.[1]||1;
+  catEl.innerHTML=cats.length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">本期無支出</div>':cats.map(([c,v],i)=>`<div style="padding:9px 16px;border-bottom:${i<cats.length-1?'.5px solid var(--gray5)':'none'};"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:14px;">${ico(c)} ${c}</span><span style="font-size:14px;color:var(--red);">${fmt(v)}</span></div><div class="prog"><div class="prog-fill" style="width:${(v/mx*100).toFixed(0)}%;background:var(--red);opacity:.6;"></div></div></div>`).join('');
+
+  // FX summary in overview
+  renderFxSummaryIn(el('ov-fx'));
+
+  // Invest summary
+  renderInvSummaryIn(el('ov-inv'));
+}
+
+// ── GENERAL ──────────────────────────────────────────────────
+function genSetMode(m,btn){
+  genMode=m;
+  document.querySelectorAll('#gen-mode-seg .seg-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  el('gen-period-row').style.display=m==='all'?'none':'flex';
+  genUpdateLbl(); renderGen();
+}
+function genMove(d){ if(genMode==='month'){genM+=d;if(genM>12){genM=1;genY++;}if(genM<1){genM=12;genY--;}}else if(genMode==='year')genY+=d; genUpdateLbl(); renderGen(); }
+function genUpdateLbl(){ el('gen-lbl').textContent=genMode==='month'?`${genY}年${genM}月`:genMode==='year'?`${genY}年`:''; }
+
+function buildGenTabs(){
+  el('gen-tabs').innerHTML=
+    `<div class="stab ${genFilter==='all'?'on':''}" onclick="setGenFilter('all',this)">全部</div>`+
+    D.cats.acct.map(a=>`<div class="stab ${genFilter===a?'on':''}" onclick="setGenFilter('${a}',this)">${a}</div>`).join('');
+}
+function setGenFilter(f,btn){ genFilter=f; document.querySelectorAll('#gen-tabs .stab').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); renderGen(); }
+
+function renderGen(){
+  genUpdateLbl(); buildGenTabs();
+  let txs=D.gen.filter(inGenPeriod);
+  if(genFilter!=='all') txs=txs.filter(t=>t.itype===genFilter||t.etype===genFilter);
+  txs.sort((a,b)=>b.date.localeCompare(a.date));
+  let ti=0,te=0;
+  txs.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
+  const bal=ti-te;
+  el('gen-inc').textContent=fmt(ti); el('gen-exp').textContent=fmt(te);
+  const balEl=el('gen-bal'); balEl.textContent=sign(bal)+fmt(bal); balEl.style.color=bal>=0?'var(--green)':'var(--red)';
+  const listEl=el('gen-list');
+  if(txs.length===0){ listEl.innerHTML='<div class="empty"><div class="empty-ic">📋</div><div class="empty-tx">尚無記錄<br>點擊右下角 ＋ 新增交易</div></div>'; return; }
+  const grp={};
+  txs.forEach(t=>{ (grp[t.date]=grp[t.date]||[]).push(t); });
+  let html='';
+  Object.entries(grp).sort((a,b)=>b[0].localeCompare(a[0])).forEach(([date,list])=>{
+    const d=new Date(date+'T00:00:00');
+    html+=`<div class="dg-hdr">${d.getMonth()+1}月${d.getDate()}日 週${WD[d.getDay()]}</div>`;
+    list.forEach(t=>{
+      const i=+t.inc||0,e=+t.exp||0; const{ni,ne}=netOf(t);
+      let amt='';
+      if(i>0&&e>0){ const net=e-i; amt=`<div style="text-align:right"><div style="font-size:11px;color:var(--gray)">+${fmt(i)} / −${fmt(e)}</div><div style="font-size:14px;font-weight:600;color:${net>0?'var(--red)':'var(--green)'}">淨${net>0?'支':'收'} ${fmt(Math.abs(net))}</div></div>`; }
+      else if(i>0) amt=`<div class="t-inc">+${fmt(i)}</div>`;
+      else if(e>0) amt=`<div class="t-exp">−${fmt(e)}</div>`;
+      const sub=[t.cat,t.itype?'收：'+t.itype:'',t.etype?'支：'+t.etype:''].filter(Boolean).join(' · ');
+      html+=`<div class="tx" onclick="delTx('gen',${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+    });
+  });
+  listEl.innerHTML=html;
+}
+
+// ── FX ───────────────────────────────────────────────────────
+function fxSetMode(m,btn){
+  fxMode=m;
+  document.querySelectorAll('#fx-mode-seg .seg-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  el('fx-period-row').style.display=m==='all'?'none':'flex';
+  fxUpdateLbl(); renderFx();
+}
+function fxMove(d){ if(fxMode==='month'){fxM+=d;if(fxM>12){fxM=1;fxY++;}if(fxM<1){fxM=12;fxY--;}}else if(fxMode==='year')fxY+=d; fxUpdateLbl(); renderFx(); }
+function fxUpdateLbl(){ el('fx-lbl').textContent=fxMode==='month'?`${fxY}年${fxM}月`:fxMode==='year'?`${fxY}年`:''; }
+
+function buildFxTabs(){
+  const currencies=[...new Set(D.fx.map(t=>t.currency))];
+  el('fx-tabs').innerHTML=
+    `<div class="stab ${fxFilter==='all'?'on':''}" onclick="setFxFilter('all',this)">全部</div>`+
+    `<div class="stab ${fxFilter==='外幣現鈔'?'on':''}" onclick="setFxFilter('外幣現鈔',this)">外幣現鈔</div>`+
+    `<div class="stab ${fxFilter==='外幣銀行帳戶'?'on':''}" onclick="setFxFilter('外幣銀行帳戶',this)">外幣銀行帳戶</div>`+
+    currencies.map(c=>`<div class="stab ${fxFilter===c?'on':''}" onclick="setFxFilter('${c}',this)">${c}</div>`).join('');
+}
+function setFxFilter(f,btn){ fxFilter=f; document.querySelectorAll('#fx-tabs .stab').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); renderFx(); }
+
+function renderFxSummaryIn(target){
+  const holds=calcFxHolds();
+  if(Object.keys(holds).length===0){ target.innerHTML='<div class="crow" style="color:var(--gray);font-size:14px;">尚無外幣持有</div>'; return; }
+  let totalTwd=0;
+  const rows=Object.entries(holds).map(([cur,v])=>{
+    const total=(v.cash||0)+(v.bank||0);
+    const twd=fxTwd(cur,total);
+    totalTwd+=twd;
+    const rate=D.fxRates[cur]||0;
+    return `<div class="crow">
+      <span class="fx-cur-badge">${cur}</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${fmtN(total)} ${cur}</div>
+        <div style="font-size:11px;color:var(--gray)">現鈔 ${fmtN(v.cash||0)} · 銀行 ${fmtN(v.bank||0)} · 匯率 ${rate}</div>
+      </div>
+      <div style="text-align:right"><div style="font-size:14px;font-weight:600">${fmt(twd)}</div><div style="font-size:11px;color:var(--gray)">TWD</div></div>
+    </div>`;
+  });
+  rows.push(`<div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">合計（TWD）</span><span style="font-size:16px;font-weight:700;color:var(--purple)">${fmt(totalTwd)}</span></div>`);
+  target.innerHTML=rows.join('');
+  // Warn if any currency has no rate
+  const hasZeroRate=Object.keys(holds).some(cur=>!D.fxRates[cur]);
+  const warn=el('fx-rate-warn');
+  if(warn) warn.style.display=hasZeroRate?'block':'none';
+}
+
+function renderFx(){
+  fxUpdateLbl(); buildFxTabs();
+  // Holdings summary (all time)
+  renderFxSummaryIn(el('fx-holds'));
+  // Period-filtered transactions
+  let txs=D.fx.filter(inFxPeriod);
+  if(fxFilter==='外幣現鈔'||fxFilter==='外幣銀行帳戶') txs=txs.filter(t=>t.acctType===fxFilter);
+  else if(fxFilter!=='all') txs=txs.filter(t=>t.currency===fxFilter);
+  txs.sort((a,b)=>b.date.localeCompare(a.date));
+  // Period summary: TWD spent buying / TWD received selling
+  let fxIn=0,fxOut=0;
+  txs.forEach(t=>{ if(t.bs==='買') fxIn+=+t.twdAmt||0; else fxOut+=+t.twdAmt||0; });
+  el('fx-in').textContent=fmt(fxIn);
+  el('fx-out').textContent=fmt(fxOut);
+  // Current value of period-filtered currencies (all time)
+  const holds=calcFxHolds();
+  const curs=fxFilter==='all'||fxFilter==='外幣現鈔'||fxFilter==='外幣銀行帳戶'
+    ?Object.keys(holds):[fxFilter];
+  let periodVal=0;
+  curs.forEach(cur=>{ const hh=holds[cur]; if(!hh)return; periodVal+=fxTwd(cur,(hh.cash||0)+(hh.bank||0)); });
+  el('fx-cur-val').textContent=fmt(periodVal);
+  const listEl=el('fx-list');
+  if(txs.length===0){ listEl.innerHTML='<div class="empty"><div class="empty-ic">💱</div><div class="empty-tx">尚無外幣記錄<br>點擊右下角 ＋ 新增</div></div>'; return; }
+  const grp={};
+  txs.forEach(t=>{ (grp[t.date]=grp[t.date]||[]).push(t); });
+  let html='';
+  Object.entries(grp).sort((a,b)=>b[0].localeCompare(a[0])).forEach(([date,list])=>{
+    const d=new Date(date+'T00:00:00');
+    html+=`<div class="dg-hdr">${d.getMonth()+1}月${d.getDate()}日 週${WD[d.getDay()]}</div>`;
+    list.forEach(t=>{
+      const isBuy=t.bs==='買';
+      const rate=D.fxRates[t.currency]||0;
+      const impliedRate=t.fxAmt&&t.twdAmt?(+t.twdAmt/+t.fxAmt).toFixed(4):'—';
+      html+=`<div class="tx" onclick="delTx('fx',${t.id})">
+        <div class="tx-ic">${isBuy?'💰':'💸'}</div>
+        <div class="tx-main">
+          <div class="tx-name">
+            <span class="badge ${isBuy?'b-buy':'b-sell'}" style="margin-right:4px;">${isBuy?'買入':'賣出/支出'}</span>${t.item}
+          </div>
+          <div class="tx-sub">${t.acctType} · ${t.currency} · 匯率 ${impliedRate}</div>
+        </div>
+        <div class="tx-right">
+          <div style="font-size:14px;font-weight:600;color:${isBuy?'var(--red)':'var(--green)'}">
+            ${isBuy?'−':'+'}${fmt(t.twdAmt||0)}
+          </div>
+          <div style="font-size:11px;color:var(--gray)">${isBuy?'+':'−'}${fmtN(t.fxAmt)} ${t.currency}</div>
+        </div>
+      </div>`;
+    });
+  });
+  listEl.innerHTML=html;
+}
+
+// ── INVEST ───────────────────────────────────────────────────
+function calcInvHolds(){
+  const h={};
+  [...D.inv].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
+    if(!h[t.item]) h[t.item]={item:t.item,cat:t.cat,qty:0,cost:0,cur:+t.price};
+    const q=+t.qty||0,p=+t.price||0,f=+t.fee||0;
+    if(t.bs==='買'){ h[t.item].qty+=q; h[t.item].cost+=q*p+f; }
+    else{ const avg=h[t.item].qty>0?h[t.item].cost/h[t.item].qty:p; h[t.item].cost-=q*avg+f; h[t.item].qty-=q; }
+    if(t.cur) h[t.item].cur=+t.cur;
+  });
+  Object.keys(h).forEach(k=>{ if(h[k].qty<=0) delete h[k]; });
+  Object.values(h).forEach(hh=>{ hh.mv=hh.qty*hh.cur; hh.pnl=hh.mv-hh.cost; hh.pct=hh.cost>0?(hh.pnl/hh.cost*100):0; hh.avg=hh.qty>0?hh.cost/hh.qty:0; });
+  return h;
+}
+function renderInvSummaryIn(el_){
+  const holds=calcInvHolds();
+  if(Object.keys(holds).length===0){ el_.innerHTML='<div class="crow" style="color:var(--gray);font-size:14px;">尚無投資部位</div>'; return; }
+  let tc=0,tv=0;
+  Object.values(holds).forEach(h=>{ tc+=h.cost; tv+=h.mv; });
+  const pnl=tv-tc,pct=tc>0?(pnl/tc*100):0;
+  el_.innerHTML=`
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">市值</span><span style="font-size:17px;font-weight:700;">${fmt(tv)}</span></div>
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">成本</span><span style="font-size:15px;">${fmt(tc)}</span></div>
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">未實現損益</span><span style="font-size:15px;font-weight:700;color:${pnl>=0?'var(--red)':'var(--green)'}">${sign(pnl)}${fmt(pnl)}&nbsp;(${sign(pct)}${pct.toFixed(2)}%)</span></div>`;
+}
+function renderInv(){
+  const holds=calcInvHolds(); let tc=0,tv=0,tf=0;
+  D.inv.forEach(t=>{ tf+=+t.fee||0; });
+  Object.values(holds).forEach(h=>{ tc+=h.cost; tv+=h.mv; });
+  const pnl=tv-tc,pct=tc>0?(pnl/tc*100):0;
+  const portEl=el('inv-port');
+  portEl.innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':`
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">總市值</span><span style="font-size:18px;font-weight:700;">${fmt(tv)}</span></div>
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">總成本</span><span style="font-size:15px;">${fmt(tc)}</span></div>
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">未實現損益</span><span style="font-size:15px;font-weight:700;color:${pnl>=0?'var(--red)':'var(--green)'}">${sign(pnl)}${fmt(pnl)}&nbsp;(${sign(pct)}${pct.toFixed(2)}%)</span></div>
+    <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">累計手續費</span><span style="font-size:14px;color:var(--gray)">${fmt(tf)}</span></div>`;
+  el('inv-hold').innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':Object.values(holds).map(h=>`<div class="inv-row"><div class="inv-name"><div class="inv-title">${h.item}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`).join('');
+  const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
+  el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="delTx('inv',${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
+}
+
+// ── DELETE ────────────────────────────────────────────────────
+function delTx(type,id){
+  if(!confirm('確定要刪除這筆記錄嗎？'))return;
+  if(type==='gen') D.gen=D.gen.filter(t=>t.id!==id);
+  else if(type==='inv') D.inv=D.inv.filter(t=>t.id!==id);
+  else if(type==='fx')  D.fx=D.fx.filter(t=>t.id!==id);
+  save();
+  if(type==='gen') renderGen();
+  else if(type==='inv') renderInv();
+  else renderFx();
+  toast('已刪除');
+}
+
+// ── GENERAL MODAL ────────────────────────────────────────────
+function openGenModal(){
+  el('g-date').value=todayStr(); el('g-item').value=''; el('g-inc').value=''; el('g-exp').value='';
+  fillSelects(); el('genModal').classList.add('on');
+}
+function fillSelects(){
+  el('g-cat').innerHTML='<option value="">選擇種類</option>'+D.cats.item.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const ao='<option value="">（無）</option>'+D.cats.acct.map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('g-inc-type').innerHTML=ao; el('g-exp-type').innerHTML=ao;
+  el('i-cat').innerHTML='<option value="">選擇種類</option>'+D.cats.inv.map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('fx-cur').innerHTML=Object.keys(D.fxRates).map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+function saveGen(){
+  const date=v('g-date'),item=v('g-item').trim(),cat=v('g-cat'),itype=v('g-inc-type'),etype=v('g-exp-type'),inc=+v('g-inc')||0,exp=+v('g-exp')||0;
+  if(!date||!item){toast('請填寫日期和項目');return;}
+  if(!itype&&!etype){toast('請至少選擇一種帳戶');return;}
+  if(itype&&inc<=0){toast('請填寫收入金額');return;}
+  if(etype&&exp<=0){toast('請填寫支出金額');return;}
+  D.gen.push({id:Date.now(),date,item,cat,itype,inc,etype,exp});
+  save(); closeOv('genModal'); renderGen(); toast('已新增交易');
+}
+
+// ── FX MODAL ─────────────────────────────────────────────────
+function openFxModal(){
+  el('fx-date').value=todayStr(); el('fx-item').value=''; el('fx-fx-amt').value=''; el('fx-twd-amt').value='';
+  fillSelects(); el('fxModal').classList.add('on');
+}
+function saveFx(){
+  const date=v('fx-date'),item=v('fx-item').trim(),bs=v('fx-bs'),acctType=v('fx-acct'),currency=v('fx-cur');
+  const fxAmt=+v('fx-fx-amt')||0,twdAmt=+v('fx-twd-amt')||0;
+  if(!date||!item){toast('請填寫日期和說明');return;}
+  if(!currency){toast('請選擇幣別');return;}
+  if(fxAmt<=0){toast('請填寫外幣金額');return;}
+  D.fx.push({id:Date.now(),date,item,currency,fxAmt,twdAmt,bs,acctType});
+  save(); closeOv('fxModal'); renderFx(); toast('已新增外幣交易');
+}
+
+// ── FX RATE MANAGER ──────────────────────────────────────────
+function openFxRateMgr(){
+  renderRateList(); el('fxRateModal').classList.add('on');
+}
+function renderRateList(){
+  el('rate-list').innerHTML=Object.entries(D.fxRates).map(([cur,rate])=>`
+    <div class="rate-row">
+      <span class="rate-cur">${cur}</span>
+      <input type="number" class="rate-val" value="${rate}" min="0" step="0.0001"
+             onchange="updateRate('${cur}',this.value)" placeholder="匯率">
+      <span class="rate-unit">TWD / 1 ${cur}</span>
+      <button class="del-btn" onclick="delCurrency('${cur}')">－</button>
+    </div>`).join('');
+}
+function updateRate(cur,val){
+  const r=parseFloat(val);
+  if(isNaN(r)||r<0){ toast('請輸入有效匯率'); return; }
+  D.fxRates[cur]=r; save(); toast(`${cur} 匯率已更新為 ${r}`);
+}
+function addCurrency(){
+  const code=el('new-cur-code').value.trim().toUpperCase();
+  const rate=parseFloat(el('new-cur-rate').value)||0;
+  if(!code){ toast('請輸入幣別代碼'); return; }
+  if(D.fxRates[code]!==undefined){ toast('幣別已存在'); return; }
+  D.fxRates[code]=rate;
+  el('new-cur-code').value=''; el('new-cur-rate').value='';
+  save(); renderRateList(); toast(`已新增 ${code}`);
+}
+function delCurrency(cur){
+  if(!confirm(`確定刪除「${cur}」？\n（已記錄的交易不受影響）`))return;
+  delete D.fxRates[cur]; save(); renderRateList(); toast('已刪除');
+}
+
+// ── INVEST MODAL ──────────────────────────────────────────────
+function openInvModal(){
+  el('i-date').value=todayStr();
+  ['i-item','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
+  fillSelects(); el('invModal').classList.add('on');
+}
+function saveInv(){
+  const date=v('i-date'),item=v('i-item').trim(),cat=v('i-cat'),bs=v('i-bs'),qty=+v('i-qty')||0,price=+v('i-price')||0,fee=+v('i-fee')||0,cur=+v('i-cur')||price;
+  if(!date||!item){toast('請填寫日期和代碼/名稱');return;}
+  if(qty<=0){toast('請填寫數量');return;}
+  if(price<=0){toast('請填寫單價');return;}
+  D.inv.push({id:Date.now(),date,item,cat,bs,qty,price,fee,cur});
+  save(); closeOv('invModal'); renderInv(); toast('已新增投資');
+}
+
+// ── CATEGORY MANAGER ─────────────────────────────────────────
+function openCatMgr(){ renderCatMgr(); el('catModal').classList.add('on'); }
+function renderCatMgr(){
+  [['acct','cl-acct'],['item','cl-item'],['inv','cl-inv']].forEach(([k,id])=>{
+    el(id).innerHTML=D.cats[k].length===0?'<div class="cat-item" style="color:var(--gray);font-size:14px;">尚無種類</div>':D.cats[k].map((c,i)=>`<div class="cat-item"><span class="cat-nm">${c}</span><button class="del-btn" onclick="delCat('${k}',${i})">－</button></div>`).join('');
+  });
+}
+function addCat(key){
+  const ids={acct:'ni-acct',item:'ni-item',inv:'ni-inv'};
+  const inp=el(ids[key]); const val=inp.value.trim();
+  if(!val)return;
+  if(D.cats[key].includes(val)){toast('種類已存在');return;}
+  D.cats[key].push(val); inp.value=''; save(); renderCatMgr();
+  if(key==='acct') buildGenTabs(); toast('已新增');
+}
+function delCat(key,i){
+  const name=D.cats[key][i];
+  if(!confirm(`確定刪除「${name}」？\n（已記錄的交易不受影響）`))return;
+  D.cats[key].splice(i,1); save(); renderCatMgr();
+  if(key==='acct'){ if(genFilter===name) genFilter='all'; buildGenTabs(); } toast('已刪除');
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+function v(id){ return document.getElementById(id).value; }
+function el(id){ return document.getElementById(id); }
+function closeOv(id){ document.getElementById(id).classList.remove('on'); }
+function todayStr(){ return new Date().toISOString().split('T')[0]; }
+function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2000); }
+document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('on'); }); });
+
+// ── BOOT ──────────────────────────────────────────────────────
+load();
+ovUpdateLbl(); genUpdateLbl(); fxUpdateLbl();
+renderOv(); renderGen(); renderFx(); renderInv();
+</script>
+
+<!-- Service Worker 註冊（離線支援）-->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
