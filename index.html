@@ -154,6 +154,8 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .cat-item:last-child{border-bottom:none;}
 .cat-nm{flex:1;font-size:15px;}
 .del-btn{color:var(--red);background:none;border:none;font-size:22px;cursor:pointer;line-height:1;padding:0 4px;flex-shrink:0;}
+.sort-btn{color:var(--gray2);background:none;border:none;font-size:15px;cursor:pointer;line-height:1;padding:0 3px;flex-shrink:0;}
+.sort-btn:disabled{opacity:.2;cursor:default;}
 /* INLINE ADD ROW */
 .add-row{display:flex;align-items:center;padding:10px 16px;background:#fff;border-radius:12px;margin-top:8px;}
 .add-input{flex:1;border:none;outline:none;font-size:15px;background:transparent;font-family:inherit;}
@@ -221,38 +223,9 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     </div>
   </div>
 
-  <!-- Period selector for detail stats -->
   <div class="sec" style="margin-top:14px;">
-    <div class="card" style="padding:10px 16px 8px;">
-      <div class="seg" id="ov-mode-seg">
-        <button class="seg-btn on" onclick="ovSetMode('month',this)">月</button>
-        <button class="seg-btn"    onclick="ovSetMode('year',this)">年</button>
-      </div>
-      <div class="period">
-        <button class="period-btn" onclick="ovMove(-1)">‹</button>
-        <div class="period-lbl" id="ov-lbl">2026年4月</div>
-        <button class="period-btn" onclick="ovMove(1)">›</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-title">一般帳戶（本期）</div>
-    <div class="sg">
-      <div class="sc"><div class="sc-lb">收入</div><div class="sc-val" id="ov-inc" style="color:var(--green)">$0</div></div>
-      <div class="sc"><div class="sc-lb">支出</div><div class="sc-val" id="ov-exp" style="color:var(--red)">$0</div></div>
-      <div class="sc"><div class="sc-lb">結餘</div><div class="sc-val" id="ov-bal" style="color:var(--blue)">$0</div></div>
-    </div>
-  </div>
-
-  <div class="sec">
     <div class="sec-title">帳戶分佈</div>
     <div class="card" id="ov-acct"></div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-title">支出分類</div>
-    <div class="card" id="ov-cat"></div>
   </div>
 
   <div class="sec">
@@ -294,6 +267,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="sc"><div class="sc-lb">支出</div><div class="sc-val" id="gen-exp" style="color:var(--red)">$0</div></div>
       <div class="sc"><div class="sc-lb">結餘</div><div class="sc-val" id="gen-bal">$0</div></div>
     </div>
+  </div>
+  <div class="sec" style="margin-top:10px;">
+    <div class="sec-title">支出分類</div>
+    <div class="card" id="gen-cat"></div>
   </div>
   <div class="sec" style="margin-top:10px;"><div class="card" id="gen-list"></div></div>
   <div style="height:80px"></div>
@@ -828,8 +805,6 @@ function ovMove(d){
 function ovUpdateLbl(){ el('ov-lbl').textContent=ovMode==='month'?`${ovY}年${ovM}月`:`${ovY}年`; }
 
 function renderOv(){
-  ovUpdateLbl();
-
   // Total assets
   const genNet = genAllTimeNet();
   const invMv  = invTotalMv();
@@ -842,40 +817,24 @@ function renderOv(){
   el('ov-t-inv').textContent = fmt(invMv);
   el('ov-t-fx').textContent  = fmt(fxTwdV);
 
-  // 最後更新時間
   const utEl = document.getElementById('ov-update-time');
   if (utEl) utEl.textContent = `股價：${fmtLU('prices')}　匯率：${fmtLU('rates')}`;
 
-  // Period stats（排除投資轉帳連動記錄）
-  const txs=D.gen.filter(t=>inOvPeriod(t)&&!t.linked);
-  let ti=0,te=0;
-  txs.forEach(t=>{ const{ni,ne}=netOf(t); ti+=ni; te+=ne; });
-  const bal=ti-te;
-  el('ov-inc').textContent=fmt(ti);
-  el('ov-exp').textContent=fmt(te);
-  const balEl=el('ov-bal');
-  balEl.textContent=sign(bal)+fmt(bal);
-  balEl.style.color=bal>=0?'var(--green)':'var(--red)';
-
-  // Account breakdown
-  const acct={};
-  txs.forEach(t=>{ const{ni,ne}=netOf(t); if(t.itype&&ni>0)acct[t.itype]=(acct[t.itype]||0)+ni; if(t.etype&&ne>0)acct[t.etype]=(acct[t.etype]||0)-ne; });
+  // 帳戶分佈：各帳戶全時段淨餘額
+  const acctBal={};
+  D.gen.forEach(t=>{
+    if(t.linked)return;
+    const{ni,ne}=netOf(t);
+    if(t.itype&&ni>0) acctBal[t.itype]=(acctBal[t.itype]||0)+ni;
+    if(t.etype&&ne>0) acctBal[t.etype]=(acctBal[t.etype]||0)-ne;
+  });
   const acctEl=el('ov-acct');
-  const ak=Object.keys(acct);
-  acctEl.innerHTML=ak.length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">本期無資料</div>':ak.map(k=>`<div class="crow"><span style="flex:1;font-size:15px;">${k}</span><span style="font-weight:600;font-size:15px;color:${acct[k]>=0?'var(--green)':'var(--red)'}">${sign(acct[k])}${fmt(acct[k])}</span></div>`).join('');
+  const ak=Object.keys(acctBal);
+  acctEl.innerHTML=ak.length===0
+    ?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無資料</div>'
+    :ak.map(k=>`<div class="crow"><span style="flex:1;font-size:15px;">${k}</span><span style="font-weight:600;font-size:15px;color:${acctBal[k]>=0?'var(--green)':'var(--red)'}">${sign(acctBal[k])}${fmt(acctBal[k])}</span></div>`).join('');
 
-  // Category breakdown
-  const catMap={};
-  txs.forEach(t=>{ const{ne}=netOf(t); if(ne>0&&t.cat)catMap[t.cat]=(catMap[t.cat]||0)+ne; });
-  const catEl=el('ov-cat');
-  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-  const mx=cats[0]?.[1]||1;
-  catEl.innerHTML=cats.length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">本期無支出</div>':cats.map(([c,v],i)=>`<div style="padding:9px 16px;border-bottom:${i<cats.length-1?'.5px solid var(--gray5)':'none'};"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:14px;">${ico(c)} ${c}</span><span style="font-size:14px;color:var(--red);">${fmt(v)}</span></div><div class="prog"><div class="prog-fill" style="width:${(v/mx*100).toFixed(0)}%;background:var(--red);opacity:.6;"></div></div></div>`).join('');
-
-  // FX summary in overview
   renderFxSummaryIn(el('ov-fx'));
-
-  // Invest summary
   renderInvSummaryIn(el('ov-inv'));
 }
 
@@ -907,6 +866,17 @@ function renderGen(){
   const bal=ti-te;
   el('gen-inc').textContent=fmt(ti); el('gen-exp').textContent=fmt(te);
   const balEl=el('gen-bal'); balEl.textContent=sign(bal)+fmt(bal); balEl.style.color=bal>=0?'var(--green)':'var(--red)';
+
+  // 支出分類
+  const catMap={};
+  txs.forEach(t=>{ if(t.linked)return; const{ne}=netOf(t); if(ne>0&&t.cat)catMap[t.cat]=(catMap[t.cat]||0)+ne; });
+  const genCatEl=el('gen-cat');
+  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const mx=cats[0]?.[1]||1;
+  genCatEl.innerHTML=cats.length===0
+    ?'<div class="crow" style="color:var(--gray);font-size:14px;">本期無支出</div>'
+    :cats.map(([c,v],i)=>`<div style="padding:9px 16px;border-bottom:${i<cats.length-1?'.5px solid var(--gray5)':'none'};"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:14px;">${ico(c)} ${c}</span><span style="font-size:14px;color:var(--red);">${fmt(v)}</span></div><div class="prog"><div class="prog-fill" style="width:${(v/mx*100).toFixed(0)}%;background:var(--red);opacity:.6;"></div></div></div>`).join('');
+
   const listEl=el('gen-list');
   if(txs.length===0){ listEl.innerHTML='<div class="empty"><div class="empty-ic">📋</div><div class="empty-tx">尚無記錄<br>點擊右下角 ＋ 新增交易</div></div>'; return; }
   const grp={};
@@ -1264,8 +1234,18 @@ function saveInv(){
 function openCatMgr(){ renderCatMgr(); el('catModal').classList.add('on'); syncFab(); }
 function renderCatMgr(){
   [['acct','cl-acct'],['item','cl-item'],['inv','cl-inv']].forEach(([k,id])=>{
-    el(id).innerHTML=D.cats[k].length===0?'<div class="cat-item" style="color:var(--gray);font-size:14px;">尚無種類</div>':D.cats[k].map((c,i)=>`<div class="cat-item"><span class="cat-nm">${c}</span><button class="del-btn" onclick="delCat('${k}',${i})">－</button></div>`).join('');
+    const arr=D.cats[k];
+    el(id).innerHTML=arr.length===0
+      ?'<div class="cat-item" style="color:var(--gray);font-size:14px;">尚無種類</div>'
+      :arr.map((c,i)=>`<div class="cat-item"><span class="cat-nm">${c}</span><div style="display:flex;align-items:center;gap:2px;flex-shrink:0;"><button class="sort-btn" onclick="moveCat('${k}',${i},-1)" ${i===0?'disabled':''}>▲</button><button class="sort-btn" onclick="moveCat('${k}',${i},1)" ${i===arr.length-1?'disabled':''}>▼</button><button class="del-btn" onclick="delCat('${k}',${i})">－</button></div></div>`).join('');
   });
+}
+function moveCat(key,i,dir){
+  const arr=D.cats[key]; const j=i+dir;
+  if(j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  save(); renderCatMgr();
+  if(key==='acct') buildGenTabs();
 }
 function addCat(key){
   const ids={acct:'ni-acct',item:'ni-item',inv:'ni-inv'};
