@@ -380,7 +380,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     <div class="m-handle"></div>
     <div class="m-hdr">
       <button class="m-btn cancel" onclick="closeOv('genModal')">取消</button>
-      <div class="m-title">新增交易</div>
+      <div class="m-title" id="genModal-title">新增交易</div>
       <button class="m-btn" onclick="saveGen()">儲存</button>
     </div>
     <div class="fsec"><div class="fcard">
@@ -402,6 +402,9 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
         <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="g-exp" placeholder="0" min="0"></div>
       </div>
     </div>
+    <div id="genModal-del" style="display:none;padding:0 16px;">
+      <button onclick="delEditTx('gen')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此交易</button>
+    </div>
     <div style="height:10px"></div>
   </div>
 </div>
@@ -412,7 +415,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     <div class="m-handle"></div>
     <div class="m-hdr">
       <button class="m-btn cancel" onclick="closeOv('fxModal')">取消</button>
-      <div class="m-title">新增外幣交易</div>
+      <div class="m-title" id="fxModal-title">新增外幣交易</div>
       <button class="m-btn" onclick="saveFx()">儲存</button>
     </div>
     <div class="fsec">
@@ -453,6 +456,9 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
           <input type="number" class="finput" id="fx-twd-amt" placeholder="台幣金額（可留空）" min="0">
         </div>
       </div>
+    </div>
+    <div id="fxModal-del" style="display:none;padding:0 16px;">
+      <button onclick="delEditTx('fx')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此交易</button>
     </div>
     <div style="height:10px"></div>
   </div>
@@ -497,7 +503,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     <div class="m-handle"></div>
     <div class="m-hdr">
       <button class="m-btn cancel" onclick="closeOv('invModal')">取消</button>
-      <div class="m-title">新增投資</div>
+      <div class="m-title" id="invModal-title">新增投資</div>
       <button class="m-btn" onclick="saveInv()">儲存</button>
     </div>
     <div class="fsec"><div class="fcard">
@@ -517,6 +523,9 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="frow"><label class="flabel">手續費</label><input type="number" class="finput" id="i-fee" placeholder="0" min="0"></div>
       <div class="frow"><label class="flabel">現價（選填）</label><input type="number" class="finput" id="i-cur" placeholder="留空同買入價" min="0" step="0.01"></div>
     </div></div>
+    <div id="invModal-del" style="display:none;padding:0 16px;">
+      <button onclick="delEditTx('inv')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此交易</button>
+    </div>
     <div style="height:10px"></div>
   </div>
 </div>
@@ -634,6 +643,7 @@ if (FB_READY) {
 
 // 同步代碼：存於 localStorage，兩台裝置使用相同代碼即可共用一份 Firestore 文件
 let FB_SYNC = localStorage.getItem('fb_sync') || null;
+let _editId = null; // 編輯模式時為交易 id，新增模式時為 null
 let _unsub  = null; // onSnapshot 取消訂閱函式
 
 function fbRef() { return db.collection('data').doc(FB_SYNC); }
@@ -907,7 +917,7 @@ function renderGen(){
       else if(i>0) amt=`<div class="t-inc">+${fmt(i)}</div>`;
       else if(e>0) amt=`<div class="t-exp">−${fmt(e)}</div>`;
       const sub=[t.cat,t.itype?'收：'+t.itype:'',t.etype?'支：'+t.etype:''].filter(Boolean).join(' · ');
-      html+=`<div class="tx" onclick="delTx('gen',${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+      html+=`<div class="tx" onclick="openEditGen(${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
     });
   });
   listEl.innerHTML=html;
@@ -993,7 +1003,7 @@ function renderFx(){
       const isBuy=t.bs==='買';
       const rate=D.fxRates[t.currency]||0;
       const impliedRate=t.fxAmt&&t.twdAmt?(+t.twdAmt/+t.fxAmt).toFixed(4):'—';
-      html+=`<div class="tx" onclick="delTx('fx',${t.id})">
+      html+=`<div class="tx" onclick="openEditFx(${t.id})">
         <div class="tx-ic">${isBuy?'💰':'💸'}</div>
         <div class="tx-main">
           <div class="tx-name">
@@ -1055,7 +1065,7 @@ function renderInv(){
     return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
   }).join('');
   const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
-  el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="delTx('inv',${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
+  el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="openEditInv(${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
 }
 
 // ── DELETE ────────────────────────────────────────────────────
@@ -1070,11 +1080,32 @@ function delTx(type,id){
   else renderFx();
   toast('已刪除');
 }
+function delEditTx(type){
+  if(_editId===null)return;
+  if(!confirm('確定要刪除這筆記錄嗎？'))return;
+  const id=_editId; _editId=null;
+  if(type==='gen'){ D.gen=D.gen.filter(t=>t.id!==id); closeOv('genModal'); renderGen(); }
+  else if(type==='fx'){ D.fx=D.fx.filter(t=>t.id!==id); closeOv('fxModal'); renderFx(); }
+  else if(type==='inv'){ D.inv=D.inv.filter(t=>t.id!==id); closeOv('invModal'); renderInv(); }
+  save(); toast('已刪除');
+}
 
 // ── GENERAL MODAL ────────────────────────────────────────────
 function openGenModal(){
+  _editId=null;
+  el('genModal-title').textContent='新增交易'; el('genModal-del').style.display='none';
   el('g-date').value=todayStr(); el('g-item').value=''; el('g-inc').value=''; el('g-exp').value='';
-  fillSelects(); el('genModal').classList.add('on');
+  fillSelects(); el('genModal').classList.add('on'); syncFab();
+}
+function openEditGen(id){
+  const t=D.gen.find(x=>x.id===id); if(!t)return;
+  _editId=id;
+  el('genModal-title').textContent='編輯交易'; el('genModal-del').style.display='block';
+  fillSelects();
+  el('g-date').value=t.date; el('g-item').value=t.item;
+  el('g-cat').value=t.cat||''; el('g-inc-type').value=t.itype||''; el('g-inc').value=t.inc||'';
+  el('g-exp-type').value=t.etype||''; el('g-exp').value=t.exp||'';
+  el('genModal').classList.add('on'); syncFab();
 }
 function fillSelects(){
   el('g-cat').innerHTML='<option value="">選擇種類</option>'+D.cats.item.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -1089,14 +1120,32 @@ function saveGen(){
   if(!itype&&!etype){toast('請至少選擇一種帳戶');return;}
   if(itype&&inc<=0){toast('請填寫收入金額');return;}
   if(etype&&exp<=0){toast('請填寫支出金額');return;}
-  D.gen.push({id:Date.now(),date,item,cat,itype,inc,etype,exp});
-  save(); closeOv('genModal'); renderGen(); toast('已新增交易');
+  if(_editId!==null){
+    const idx=D.gen.findIndex(t=>t.id===_editId);
+    if(idx>=0) D.gen[idx]={id:_editId,date,item,cat,itype,inc,etype,exp};
+    _editId=null; save(); closeOv('genModal'); renderGen(); toast('已更新交易');
+  } else {
+    D.gen.push({id:Date.now(),date,item,cat,itype,inc,etype,exp});
+    save(); closeOv('genModal'); renderGen(); toast('已新增交易');
+  }
 }
 
 // ── FX MODAL ─────────────────────────────────────────────────
 function openFxModal(){
+  _editId=null;
+  el('fxModal-title').textContent='新增外幣交易'; el('fxModal-del').style.display='none';
   el('fx-date').value=todayStr(); el('fx-item').value=''; el('fx-fx-amt').value=''; el('fx-twd-amt').value='';
-  fillSelects(); el('fxModal').classList.add('on');
+  fillSelects(); el('fxModal').classList.add('on'); syncFab();
+}
+function openEditFx(id){
+  const t=D.fx.find(x=>x.id===id); if(!t)return;
+  _editId=id;
+  el('fxModal-title').textContent='編輯外幣交易'; el('fxModal-del').style.display='block';
+  fillSelects();
+  el('fx-date').value=t.date; el('fx-item').value=t.item; el('fx-bs').value=t.bs;
+  el('fx-acct').value=t.acctType; el('fx-cur').value=t.currency;
+  el('fx-fx-amt').value=t.fxAmt; el('fx-twd-amt').value=t.twdAmt||'';
+  el('fxModal').classList.add('on'); syncFab();
 }
 function saveFx(){
   const date=v('fx-date'),item=v('fx-item').trim(),bs=v('fx-bs'),acctType=v('fx-acct'),currency=v('fx-cur');
@@ -1104,13 +1153,19 @@ function saveFx(){
   if(!date||!item){toast('請填寫日期和說明');return;}
   if(!currency){toast('請選擇幣別');return;}
   if(fxAmt<=0){toast('請填寫外幣金額');return;}
-  D.fx.push({id:Date.now(),date,item,currency,fxAmt,twdAmt,bs,acctType});
-  save(); closeOv('fxModal'); renderFx(); toast('已新增外幣交易');
+  if(_editId!==null){
+    const idx=D.fx.findIndex(t=>t.id===_editId);
+    if(idx>=0) D.fx[idx]={id:_editId,date,item,currency,fxAmt,twdAmt,bs,acctType};
+    _editId=null; save(); closeOv('fxModal'); renderFx(); toast('已更新外幣交易');
+  } else {
+    D.fx.push({id:Date.now(),date,item,currency,fxAmt,twdAmt,bs,acctType});
+    save(); closeOv('fxModal'); renderFx(); toast('已新增外幣交易');
+  }
 }
 
 // ── FX RATE MANAGER ──────────────────────────────────────────
 function openFxRateMgr(){
-  renderRateList(); el('fxRateModal').classList.add('on');
+  renderRateList(); el('fxRateModal').classList.add('on'); syncFab();
 }
 function renderRateList(){
   el('rate-list').innerHTML=Object.entries(D.fxRates).map(([cur,rate])=>`
@@ -1143,9 +1198,22 @@ function delCurrency(cur){
 
 // ── INVEST MODAL ──────────────────────────────────────────────
 function openInvModal(){
+  _editId=null;
+  el('invModal-title').textContent='新增投資'; el('invModal-del').style.display='none';
   el('i-date').value=todayStr();
   ['i-item','i-ticker','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
-  fillSelects(); el('invModal').classList.add('on');
+  fillSelects(); el('invModal').classList.add('on'); syncFab();
+}
+function openEditInv(id){
+  const t=D.inv.find(x=>x.id===id); if(!t)return;
+  _editId=id;
+  el('invModal-title').textContent='編輯投資'; el('invModal-del').style.display='block';
+  fillSelects();
+  el('i-date').value=t.date; el('i-item').value=t.item; el('i-ticker').value=t.ticker||'';
+  el('i-cat').value=t.cat||''; el('i-bs').value=t.bs;
+  el('i-qty').value=t.qty; el('i-price').value=t.price; el('i-fee').value=t.fee||'';
+  el('i-cur').value=t.cur||'';
+  el('invModal').classList.add('on'); syncFab();
 }
 function saveInv(){
   const date=v('i-date'),item=v('i-item').trim();
@@ -1155,12 +1223,18 @@ function saveInv(){
   if(!date||!item){toast('請填寫日期和名稱');return;}
   if(qty<=0){toast('請填寫數量');return;}
   if(price<=0){toast('請填寫單價');return;}
-  D.inv.push({id:Date.now(),date,item,ticker,cat,bs,qty,price,fee,cur});
-  save(); closeOv('invModal'); renderInv(); toast('已新增投資');
+  if(_editId!==null){
+    const idx=D.inv.findIndex(t=>t.id===_editId);
+    if(idx>=0) D.inv[idx]={id:_editId,date,item,ticker,cat,bs,qty,price,fee,cur};
+    _editId=null; save(); closeOv('invModal'); renderInv(); toast('已更新投資');
+  } else {
+    D.inv.push({id:Date.now(),date,item,ticker,cat,bs,qty,price,fee,cur});
+    save(); closeOv('invModal'); renderInv(); toast('已新增投資');
+  }
 }
 
 // ── CATEGORY MANAGER ─────────────────────────────────────────
-function openCatMgr(){ renderCatMgr(); el('catModal').classList.add('on'); }
+function openCatMgr(){ renderCatMgr(); el('catModal').classList.add('on'); syncFab(); }
 function renderCatMgr(){
   [['acct','cl-acct'],['item','cl-item'],['inv','cl-inv']].forEach(([k,id])=>{
     el(id).innerHTML=D.cats[k].length===0?'<div class="cat-item" style="color:var(--gray);font-size:14px;">尚無種類</div>':D.cats[k].map((c,i)=>`<div class="cat-item"><span class="cat-nm">${c}</span><button class="del-btn" onclick="delCat('${k}',${i})">－</button></div>`).join('');
@@ -1184,10 +1258,11 @@ function delCat(key,i){
 // ── UTILS ─────────────────────────────────────────────────────
 function v(id){ return document.getElementById(id).value; }
 function el(id){ return document.getElementById(id); }
-function closeOv(id){ document.getElementById(id).classList.remove('on'); }
+function syncFab(){ const f=document.getElementById('fab'); if(f) f.style.visibility=document.querySelector('.ov.on')?'hidden':''; }
+function closeOv(id){ document.getElementById(id).classList.remove('on'); syncFab(); }
 function todayStr(){ return new Date().toISOString().split('T')[0]; }
 function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2000); }
-document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('on'); }); });
+document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this){ this.classList.remove('on'); syncFab(); } }); });
 
 // ── SYNC MODAL ────────────────────────────────────────────────
 function openSyncModal() {
@@ -1203,7 +1278,7 @@ function openSyncModal() {
     codeEl.textContent = FB_SYNC || '（初始化中）';
   }
   el('sync-code-input').value = '';
-  el('syncModal').classList.add('on');
+  el('syncModal').classList.add('on'); syncFab();
 }
 
 function copySyncCode() {
