@@ -178,6 +178,12 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 </style>
 </head>
 <body>
+<!-- Loading 畫面（Firebase 連線中） -->
+<div id="loading-overlay" style="position:fixed;inset:0;background:#F2F2F7;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="font-size:56px;">💰</div>
+  <div style="font-size:18px;font-weight:700;color:#1C1C1E;">記帳工具</div>
+  <div style="font-size:14px;color:#8E8E93;">連線中…</div>
+</div>
 <div id="app">
 <div class="toast" id="toast"></div>
 
@@ -185,7 +191,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 <div id="pg-overview" class="page on">
   <div class="hdr">
     <h1>總覽</h1>
-    <button class="refresh-btn" id="refresh-btn" onclick="autoUpdate()">↻ 更新</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="refresh-btn" id="refresh-btn" onclick="autoUpdate()">↻ 更新</button>
+      <button class="refresh-btn" onclick="openSyncModal()">🔗 同步</button>
+    </div>
   </div>
 
   <!-- Total assets hero (all-time) -->
@@ -543,7 +552,51 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 </div>
 
+<!-- ═══════════ SYNC MODAL ═══════════ -->
+<div class="ov" id="syncModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('syncModal')">關閉</button>
+      <div class="m-title">跨裝置同步</div>
+      <div style="width:44px"></div>
+    </div>
+    <div class="fsec">
+      <div id="sync-status-banner" class="info-banner" style="margin:0;line-height:1.6;"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">你的同步代碼</div>
+      <div class="fcard">
+        <div class="frow" style="gap:8px;align-items:flex-start;padding:14px 16px;">
+          <div id="sync-code-display" style="flex:1;font-size:12px;font-family:monospace;color:#333;word-break:break-all;line-height:1.8;"></div>
+          <button onclick="copySyncCode()" style="flex-shrink:0;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;">複製</button>
+        </div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">在另一台裝置輸入此代碼</div>
+      <div class="fcard">
+        <div class="frow">
+          <input class="finput" style="text-align:left;" id="sync-code-input"
+                 placeholder="貼上另一台裝置的同步代碼" autocomplete="off">
+        </div>
+      </div>
+      <div class="warn-banner" style="margin:8px 0 0;">⚠️ 套用後，本機資料將被遠端資料覆蓋，請確認代碼正確。</div>
+    </div>
+    <div class="fsec">
+      <button onclick="applySyncCode()" style="width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:8px;">套用並同步</button>
+    </div>
+    <div style="height:16px"></div>
+  </div>
+</div>
+
 </div><!-- #app -->
+
+<!-- Firebase SDK（compat 版，支援一般 <script> 使用） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
 <script>
 'use strict';
 // ── DATA ─────────────────────────────────────────────────────
@@ -561,12 +614,92 @@ let D = {
   fx:[]
 };
 
-function load(){
-  const raw=localStorage.getItem(SK);
-  if(raw){try{D=JSON.parse(raw);}catch(e){}}
-  else seed();
+// ── FIREBASE 設定 ────────────────────────────────────────────
+// ★ 請到 https://console.firebase.google.com 建立專案並取得設定，
+//   將下方 PASTE_YOUR_... 替換為你的實際值，再部署到 GitHub Pages。
+const firebaseConfig = {
+  apiKey:            "AIzaSyBHUA4c3lu_vTcCQf0l2MOCMUpGX4fh1QQ",
+  authDomain:        "budget-app-c456e.firebaseapp.com",
+  projectId:         "budget-app-c456e",
+  storageBucket:     "budget-app-c456e.firebasestorage.app",
+  messagingSenderId: "873874476986",
+  appId:             "1:873874476986:web:1b30a265c850b6e8641783"
+};
+
+const FB_READY = firebaseConfig.apiKey !== "AIzaSyBHUA4c3lu_vTcCQf0l2MOCMUpGX4fh1QQ";
+let db, auth;
+if (FB_READY) {
+  firebase.initializeApp(firebaseConfig);
+  db   = firebase.firestore();
+  auth = firebase.auth();
 }
-function save(){ localStorage.setItem(SK,JSON.stringify(D)); }
+
+// 同步代碼：存於 localStorage，兩台裝置使用相同代碼即可共用一份 Firestore 文件
+let FB_SYNC = localStorage.getItem('fb_sync') || null;
+let _unsub  = null; // onSnapshot 取消訂閱函式
+
+function fbRef() { return db.collection('data').doc(FB_SYNC); }
+
+function genSyncCode() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+// ── SAVE ─────────────────────────────────────────────────────
+function save() {
+  if (FB_READY && FB_SYNC) {
+    // 寫入 Firestore（非同步，fire-and-forget）
+    fbRef().set(D).catch(e => console.error('Firestore write error:', e));
+  } else {
+    // Firebase 未設定時備援至 localStorage
+    localStorage.setItem(SK, JSON.stringify(D));
+  }
+}
+
+// ── FIREBASE INIT ────────────────────────────────────────────
+async function initFirebase() {
+  if (!FB_READY) {
+    // Firebase 未設定 → 使用 localStorage
+    const raw = localStorage.getItem(SK);
+    if (raw) { try { D = JSON.parse(raw); } catch(e) {} } else { seed(); }
+    return;
+  }
+  // 匿名登入（讓 Firestore 安全規則可驗證身份）
+  await auth.signInAnonymously();
+  // 取得或產生同步代碼
+  if (!FB_SYNC) {
+    FB_SYNC = genSyncCode();
+    localStorage.setItem('fb_sync', FB_SYNC);
+  }
+  // 讀取 Firestore 文件
+  const snap = await fbRef().get();
+  if (snap.exists) {
+    D = snap.data();
+    // 相容性補齊（防止舊版本缺欄位）
+    if (!D.cats)    D.cats    = {acct:['現金','銀行存款'],item:['飲食','其他'],inv:['台股','其他']};
+    if (!D.fxRates) D.fxRates = {JPY:0.218,USD:32.5,EUR:36.2};
+    if (!D.gen)     D.gen     = [];
+    if (!D.inv)     D.inv     = [];
+    if (!D.fx)      D.fx      = [];
+  } else {
+    seed(); // 第一次使用，建立範例資料並存入 Firestore
+  }
+  // 訂閱即時更新：另一台裝置修改後，這台也會自動同步重繪
+  _unsub = fbRef().onSnapshot(snap => {
+    if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    D = snap.data();
+    renderCurrentPage();
+  });
+}
+
+function renderCurrentPage() {
+  if (curPage === 'overview') renderOv();
+  if (curPage === 'general')  renderGen();
+  if (curPage === 'fx')       renderFx();
+  if (curPage === 'invest')   renderInv();
+}
 
 function seed(){
   D.gen=[
@@ -1058,6 +1191,74 @@ function todayStr(){ return new Date().toISOString().split('T')[0]; }
 function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2000); }
 document.querySelectorAll('.ov').forEach(ov=>{ ov.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('on'); }); });
 
+// ── SYNC MODAL ────────────────────────────────────────────────
+function openSyncModal() {
+  const banEl = el('sync-status-banner');
+  const codeEl = el('sync-code-display');
+  if (!FB_READY) {
+    banEl.textContent = '⚠️ 尚未完成 Firebase 設定，目前使用本機儲存，資料不會同步到其他裝置。';
+    banEl.className = 'warn-banner';
+    codeEl.textContent = '（未設定 Firebase）';
+  } else {
+    banEl.textContent = '📡 已連線 Firebase。複製下方代碼，在另一台裝置點選「🔗 同步」並貼上，即可共用同一份帳本。';
+    banEl.className = 'info-banner';
+    codeEl.textContent = FB_SYNC || '（初始化中）';
+  }
+  el('sync-code-input').value = '';
+  el('syncModal').classList.add('on');
+}
+
+function copySyncCode() {
+  if (!FB_SYNC) { toast('代碼尚未產生'); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(FB_SYNC).then(() => toast('已複製同步代碼'));
+  } else {
+    // 舊版 Safari fallback
+    const ta = document.createElement('textarea');
+    ta.value = FB_SYNC; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    toast('已複製同步代碼');
+  }
+}
+
+async function applySyncCode() {
+  if (!FB_READY) { toast('請先完成 Firebase 設定'); return; }
+  const code = el('sync-code-input').value.trim();
+  if (!code) { toast('請輸入同步代碼'); return; }
+  if (code === FB_SYNC) { toast('已在使用此代碼'); return; }
+  if (!confirm('確定要切換同步代碼？本機資料將被遠端資料取代。')) return;
+
+  if (_unsub) { _unsub(); _unsub = null; }
+  FB_SYNC = code;
+  localStorage.setItem('fb_sync', code);
+
+  try {
+    const snap = await fbRef().get();
+    if (snap.exists) {
+      D = snap.data();
+      if (!D.cats)    D.cats    = {acct:[],item:[],inv:[]};
+      if (!D.fxRates) D.fxRates = {};
+      if (!D.gen)     D.gen     = [];
+      if (!D.inv)     D.inv     = [];
+      if (!D.fx)      D.fx      = [];
+    } else {
+      toast('找不到此代碼的資料，保持目前資料');
+    }
+  } catch(e) {
+    toast('載入失敗：' + e.message); return;
+  }
+
+  _unsub = fbRef().onSnapshot(snap => {
+    if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    D = snap.data();
+    renderCurrentPage();
+  });
+
+  closeOv('syncModal');
+  renderOv(); renderGen(); renderFx(); renderInv();
+  toast('已切換同步代碼');
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FAB 精確定位（JS 計算，避免 CSS env() 相容問題）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1200,34 +1401,47 @@ function fmtLU(type) {
 }
 
 // ── BOOT ──────────────────────────────────────────────────────
-load();
-ovUpdateLbl(); genUpdateLbl(); fxUpdateLbl();
-renderOv(); renderGen(); renderFx(); renderInv();
-
-// 調整 FAB 位置（DOM 載入後）
-requestAnimationFrame(() => {
-  adjustFab();
-  // 更新總覽的最後更新時間顯示
-  const utEl = document.getElementById('ov-update-time');
-  if (utEl) {
-    const p = fmtLU('prices'), r = fmtLU('rates');
-    utEl.textContent = `股價：${p}　匯率：${r}`;
+(async () => {
+  try {
+    await initFirebase();
+  } catch(e) {
+    console.error('Firebase 初始化失敗，切換至本機模式', e);
+    // 備援：從 localStorage 讀取
+    const raw = localStorage.getItem(SK);
+    if (raw) { try { D = JSON.parse(raw); } catch(e2) {} } else { seed(); }
   }
-});
 
-// 若上次更新超過 1 小時（或從未更新），自動靜默更新
-const stale = !D.lastUpdate?.rates ||
-  (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
-if (stale) autoUpdate();
+  // 隱藏 loading 畫面
+  const lo = document.getElementById('loading-overlay');
+  if (lo) lo.style.display = 'none';
 
-// PWA 從背景切回前台時重新檢查
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    const old = !D.lastUpdate?.rates ||
-      (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
-    if (old) autoUpdate();
-  }
-});
+  ovUpdateLbl(); genUpdateLbl(); fxUpdateLbl();
+  renderOv(); renderGen(); renderFx(); renderInv();
+
+  // 調整 FAB 位置（DOM 完全渲染後）
+  requestAnimationFrame(() => {
+    adjustFab();
+    const utEl = document.getElementById('ov-update-time');
+    if (utEl) {
+      const p = fmtLU('prices'), r = fmtLU('rates');
+      utEl.textContent = `股價：${p}　匯率：${r}`;
+    }
+  });
+
+  // 若上次更新超過 1 小時（或從未更新），自動靜默更新
+  const stale = !D.lastUpdate?.rates ||
+    (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
+  if (stale) autoUpdate();
+
+  // PWA 從背景切回前台時重新檢查
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      const old = !D.lastUpdate?.rates ||
+        (Date.now() - new Date(D.lastUpdate.rates).getTime()) > 3_600_000;
+      if (old) autoUpdate();
+    }
+  });
+})();
 </script>
 
 <!-- Service Worker 註冊（離線支援）-->
