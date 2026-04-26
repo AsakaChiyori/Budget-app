@@ -578,6 +578,53 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 </div>
 
+<!-- ═══════════ TRANSFER MODAL ═══════════ -->
+<div class="ov" id="transferModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('transferModal')">取消</button>
+      <div class="m-title" id="transferModal-title">帳戶轉帳</div>
+      <button class="m-btn" onclick="saveTransfer()">儲存</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="tr-date"></div>
+      <div class="frow"><label class="flabel">備註</label><input type="text" class="finput" id="tr-item" placeholder="轉帳說明（選填）"></div>
+      <div class="frow"><label class="flabel">從帳戶</label><select class="finput" id="tr-from"></select></div>
+      <div class="frow"><label class="flabel">到帳戶</label><select class="finput" id="tr-to"></select></div>
+      <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="tr-amt" placeholder="0" min="0"></div>
+    </div></div>
+    <div id="transferModal-del" style="display:none;padding:0 16px;">
+      <button onclick="delEditTx('transfer')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此轉帳</button>
+    </div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ ADD SHEET (General) ═══════════ -->
+<div class="ov" id="addSheet">
+  <div class="modal" style="padding-bottom:16px;">
+    <div class="m-handle"></div>
+    <div class="m-hdr" style="padding-bottom:4px;">
+      <div style="width:44px"></div>
+      <div class="m-title">新增</div>
+      <button class="m-btn cancel" onclick="closeOv('addSheet')">取消</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow" style="cursor:pointer;gap:14px;" onclick="closeOv('addSheet');openGenModal()">
+        <div style="font-size:24px;width:36px;text-align:center;">💳</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:500;">新增交易</div><div style="font-size:12px;color:var(--gray);margin-top:1px;">記錄收入或支出</div></div>
+        <div style="color:var(--gray3);font-size:18px;">›</div>
+      </div>
+      <div class="frow" style="cursor:pointer;gap:14px;" onclick="closeOv('addSheet');openTransferModal()">
+        <div style="font-size:24px;width:36px;text-align:center;">🔄</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:500;">帳戶轉帳</div><div style="font-size:12px;color:var(--gray);margin-top:1px;">在帳戶之間轉移資金</div></div>
+        <div style="color:var(--gray3);font-size:18px;">›</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
 </div><!-- #app -->
 
 <!-- Firebase SDK（compat 版，支援一般 <script> 使用） -->
@@ -742,6 +789,7 @@ function goPage(p){
 function openAdd(){
   if(curPage==='invest') openInvModal();
   else if(curPage==='fx') openFxModal();
+  else if(curPage==='general'){ el('addSheet').classList.add('on'); syncFab(); }
   else openGenModal();
 }
 
@@ -823,9 +871,14 @@ function renderOv(){
   // 帳戶分佈：各帳戶全時段淨餘額
   const acctBal={};
   D.gen.forEach(t=>{
-    const{ni,ne}=netOf(t);
-    if(t.itype&&ni>0) acctBal[t.itype]=(acctBal[t.itype]||0)+ni;
-    if(t.etype&&ne>0) acctBal[t.etype]=(acctBal[t.etype]||0)-ne;
+    if(t.linked==='transfer'){
+      if(t.itype) acctBal[t.itype]=(acctBal[t.itype]||0)+(+t.inc||0);
+      if(t.etype) acctBal[t.etype]=(acctBal[t.etype]||0)-(+t.exp||0);
+    } else {
+      const{ni,ne}=netOf(t);
+      if(t.itype&&ni>0) acctBal[t.itype]=(acctBal[t.itype]||0)+ni;
+      if(t.etype&&ne>0) acctBal[t.etype]=(acctBal[t.etype]||0)-ne;
+    }
   });
   const acctEl=el('ov-acct');
   const ak=Object.keys(acctBal);
@@ -891,7 +944,9 @@ function renderGen(){
       else if(i>0) amt=`<div class="t-inc">+${fmt(i)}</div>`;
       else if(e>0) amt=`<div class="t-exp">−${fmt(e)}</div>`;
       const sub=[t.cat,t.itype?'收：'+t.itype:'',t.etype?'支：'+t.etype:''].filter(Boolean).join(' · ');
-      if(t.linked){
+      if(t.linked==='transfer'){
+        html+=`<div class="tx" onclick="openEditTransfer(${t.id})"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:#E5F0FF;color:#0066CC;border-radius:4px;padding:1px 5px;margin-right:4px;">轉帳</span>${t.item}</div><div class="tx-sub">${t.etype} → ${t.itype}</div></div><div class="tx-right"><div style="font-size:14px;font-weight:600;color:var(--blue)">${fmt(+t.inc)}</div></div></div>`;
+      } else if(t.linked){
         html+=`<div class="tx" style="opacity:.6;cursor:default"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:#EEF2FF;color:#4F46E5;border-radius:4px;padding:1px 5px;margin-right:4px;">投資轉帳</span>${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
       } else {
         html+=`<div class="tx" onclick="openEditGen(${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
@@ -1068,6 +1123,8 @@ function delEditTx(type){
     const tx=D.inv.find(t=>t.id===id);
     if(tx&&tx.linkedGenId) D.gen=D.gen.filter(t=>t.id!==tx.linkedGenId);
     D.inv=D.inv.filter(t=>t.id!==id); closeOv('invModal'); renderInv(); renderGen();
+  } else if(type==='transfer'){
+    D.gen=D.gen.filter(t=>t.id!==id); closeOv('transferModal'); renderGen(); renderOv();
   }
   save(); toast('已刪除');
 }
@@ -1096,6 +1153,8 @@ function fillSelects(){
   el('i-cat').innerHTML='<option value="">選擇種類</option>'+D.cats.inv.map(c=>`<option value="${c}">${c}</option>`).join('');
   el('fx-cur').innerHTML=Object.keys(D.fxRates).map(c=>`<option value="${c}">${c}</option>`).join('');
   el('i-bank').innerHTML='<option value="">不連動</option>'+D.cats.acct.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const ao2='<option value="">選擇帳戶</option>'+D.cats.acct.map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('tr-from').innerHTML=ao2; el('tr-to').innerHTML=ao2;
 }
 function saveGen(){
   const date=v('g-date'),item=v('g-item').trim(),cat=v('g-cat'),itype=v('g-inc-type'),etype=v('g-exp-type'),inc=+v('g-inc')||0,exp=+v('g-exp')||0;
@@ -1226,6 +1285,42 @@ function saveInv(){
     }
     D.inv.push(newInv);
     save(); closeOv('invModal'); renderInv(); if(bankAcct)renderGen(); toast('已新增投資');
+  }
+}
+
+// ── TRANSFER MODAL ───────────────────────────────────────────
+function openTransferModal(){
+  _editId=null;
+  el('transferModal-title').textContent='帳戶轉帳'; el('transferModal-del').style.display='none';
+  el('tr-date').value=todayStr(); el('tr-item').value=''; el('tr-amt').value='';
+  fillSelects(); el('transferModal').classList.add('on'); syncFab();
+}
+function openEditTransfer(id){
+  const t=D.gen.find(x=>x.id===id); if(!t)return;
+  _editId=id;
+  el('transferModal-title').textContent='編輯轉帳'; el('transferModal-del').style.display='block';
+  fillSelects();
+  el('tr-date').value=t.date; el('tr-item').value=t.item==='轉帳'?'':t.item;
+  el('tr-from').value=t.etype||''; el('tr-to').value=t.itype||'';
+  el('tr-amt').value=t.inc||'';
+  el('transferModal').classList.add('on'); syncFab();
+}
+function saveTransfer(){
+  const date=v('tr-date'),item=v('tr-item').trim()||'轉帳';
+  const from=v('tr-from'),to=v('tr-to'),amt=+v('tr-amt')||0;
+  if(!date){toast('請填寫日期');return;}
+  if(!from){toast('請選擇來源帳戶');return;}
+  if(!to){toast('請選擇目標帳戶');return;}
+  if(from===to){toast('來源與目標帳戶不能相同');return;}
+  if(amt<=0){toast('請填寫金額');return;}
+  const rec={date,item,cat:'轉帳',itype:to,inc:amt,etype:from,exp:amt,linked:'transfer'};
+  if(_editId!==null){
+    const idx=D.gen.findIndex(t=>t.id===_editId);
+    if(idx>=0) D.gen[idx]={id:_editId,...rec};
+    _editId=null; save(); closeOv('transferModal'); renderGen(); renderOv(); toast('已更新轉帳');
+  } else {
+    D.gen.push({id:Date.now(),...rec});
+    save(); closeOv('transferModal'); renderGen(); renderOv(); toast('已新增轉帳');
   }
 }
 
