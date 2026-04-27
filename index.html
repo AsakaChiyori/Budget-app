@@ -1099,7 +1099,8 @@ function renderInv(){
     <div class="crow"><span style="flex:1;font-size:14px;color:var(--gray)">累計手續費</span><span style="font-size:14px;color:var(--gray)">${fmt(tf)}</span></div>`;
   el('inv-hold').innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':Object.values(holds).map(h=>{
     const sym=toYahooSym(h.item,h.cat,h.ticker);
-    const tickerTag=`<span style="font-size:11px;background:#F0F0FF;color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${sym}</span>`;
+    const displaySym=sym||h.ticker||'';
+    const tickerTag=displaySym?`<span style="font-size:11px;background:#F0F0FF;color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${displaySym}</span>`:``;
     return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
   }).join('');
   const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
