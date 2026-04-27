@@ -487,11 +487,16 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="i-date"></div>
       <div class="frow"><label class="flabel">名稱</label><input type="text" class="finput" id="i-item" placeholder="例：元大台灣50、VOO"></div>
       <div class="frow">
-        <label class="flabel">股票代號</label>
-        <input type="text" class="finput" id="i-ticker" placeholder="例：0050、VOO（用於抓股價）"
-               oninput="this.value=this.value.toUpperCase()">
+        <label class="flabel" id="i-ticker-label">股票代號</label>
+        <div style="display:flex;gap:6px;align-items:center;flex:1">
+          <input type="text" class="finput" id="i-ticker" placeholder="例：0050、VOO（用於抓股價）"
+                 oninput="this.value=this.value.toUpperCase()" style="flex:1;min-width:0">
+          <button type="button" id="i-fund-search-btn" onclick="openFundSearch()"
+                  style="display:none;padding:8px 12px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">搜尋</button>
+        </div>
       </div>
-      <div class="frow"><label class="flabel">種類</label><select class="finput" id="i-cat"></select></div>
+      <div id="i-fund-results" style="display:none;margin:-4px 0 4px;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;background:#fff;max-height:220px;overflow-y:auto;"></div>
+      <div class="frow"><label class="flabel">種類</label><select class="finput" id="i-cat" onchange="syncFundSearchUI()"></select></div>
       <div class="frow"><label class="flabel">買/賣</label>
         <select class="finput" id="i-bs"><option value="買">買入</option><option value="賣">賣出</option></select>
       </div>
@@ -1244,7 +1249,7 @@ function openInvModal(){
   el('invModal-title').textContent='新增投資'; el('invModal-del').style.display='none';
   el('i-date').value=todayStr();
   ['i-item','i-ticker','i-qty','i-price','i-fee','i-cur'].forEach(id=>el(id).value='');
-  fillSelects(); el('i-bank').value=''; el('i-bank-row').style.display='';
+  fillSelects(); syncFundSearchUI(); el('i-bank').value=''; el('i-bank-row').style.display='';
   el('invModal').classList.add('on'); syncFab();
 }
 function openEditInv(id){
@@ -1254,7 +1259,7 @@ function openEditInv(id){
   el('i-bank-row').style.display='none';
   fillSelects();
   el('i-date').value=t.date; el('i-item').value=t.item; el('i-ticker').value=t.ticker||'';
-  el('i-cat').value=t.cat||''; el('i-bs').value=t.bs;
+  el('i-cat').value=t.cat||''; syncFundSearchUI(); el('i-bs').value=t.bs;
   el('i-qty').value=t.qty; el('i-price').value=t.price; el('i-fee').value=t.fee||'';
   el('i-cur').value=t.cur||'';
   el('invModal').classList.add('on'); syncFab();
@@ -1496,27 +1501,43 @@ async function fetchPrices() {
     const holds = calcInvHolds();
     if (Object.keys(holds).length === 0) return;
 
-    let n = 0;
+    let n = 0, noCode = 0;
     for (const h of Object.values(holds)) {
       try {
-        const sym   = toYahooSym(h.item, h.cat, h.ticker);
+        // 台灣共同基金（MoneyDJ）：cat=基金 且代號不含點
+        if (h.cat === '基金' && h.ticker && !h.ticker.includes('.')) {
+          const price = await fetchMoneyDJFundNav(h.ticker);
+          if (price !== null) {
+            D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
+            n++;
+          }
+          continue;
+        }
+        // 股票 / ETF / 境外基金：Yahoo Finance
+        const sym = toYahooSym(h.item, h.cat, h.ticker);
+        if (!sym) { noCode++; continue; }
         const price = await getYahooPrice(sym);
         if (price !== null) {
           D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
           n++;
         }
-      } catch(e) { /* 單一股票失敗不影響其他 */ }
+      } catch(e) { /* 單一標的失敗不影響其他 */ }
     }
-    if (n > 0) { setLU('prices'); save(); toast(`股價已更新 ${n} 檔`); }
-    else toast('股價取得失敗，請稍後再試');
+    if (n > 0) { setLU('prices'); save(); toast(noCode ? `已更新 ${n} 檔，${noCode} 檔未填代號` : `股價已更新 ${n} 檔`); }
+    else if (noCode) toast(`${noCode} 檔持倉尚未填入代號`);
+    else toast('價格取得失敗，請稍後再試');
   } catch(e) {
     console.warn('股價更新失敗', e);
   }
 }
 
 // 取得 Yahoo Finance 代號
-// 優先用 ticker 欄位；沒有的話才從 item 名稱開頭萃取
+// 基金：含 . 的代號視為 Yahoo Finance（如 0P0001XXXX.TW）；無 . 的交給 MoneyDJ，回傳 null
 function toYahooSym(item, cat, ticker) {
+  if (cat === '基金') {
+    if (!ticker || !ticker.includes('.')) return null;
+    return ticker.toUpperCase();
+  }
   const tk = (ticker || item.match(/^([A-Za-z0-9]+)/)?.[1] || item.split(' ')[0]).toUpperCase();
   return (cat === '台股' || (cat === 'ETF' && /^\d+$/.test(tk))) ? tk + '.TW' : tk;
 }
@@ -1551,6 +1572,124 @@ async function getYahooPrice(symbol) {
   } catch(e) { /* proxy 也失敗 */ }
 
   return null;
+}
+
+// ── 台灣共同基金淨值（MoneyDJ mobile，allorigins proxy）──────────
+async function fetchMoneyDJFundNav(code) {
+  const url = `https://m.moneydj.com/a1.aspx?a=${encodeURIComponent(code.toLowerCase())}`;
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r = await ft(proxyUrl, 15000);
+    if (!r.ok) return null;
+    const w = await r.json();
+    const html = w.contents || '';
+    // HTML: <span class="increase">675.83</span> 或 class="decrease"
+    const m = html.match(/class="(?:increase|decrease)">([\d,]+\.?\d*)<\/span>/);
+    if (m) return parseFloat(m[1].replace(/,/g, ''));
+  } catch(e) {}
+  return null;
+}
+
+// ── 基金代號搜尋（MoneyDJ 優先，Yahoo Finance 備援）──────────────
+function syncFundSearchUI() {
+  const isFund = el('i-cat').value === '基金';
+  el('i-fund-search-btn').style.display = isFund ? '' : 'none';
+  el('i-ticker-label').textContent = isFund ? '基金代號' : '股票代號';
+  el('i-ticker').placeholder = isFund
+    ? '台灣基金填 MoneyDJ 代號（如：ACDD04）；境外基金填 Yahoo 代號（含 .）'
+    : '例：0050、VOO（用於抓股價）';
+  el('i-fund-results').style.display = 'none';
+}
+
+async function openFundSearch() {
+  const name = el('i-item').value.trim() || el('i-ticker').value.trim();
+  if (!name) { toast('請先填入基金名稱再搜尋'); return; }
+
+  const btn = el('i-fund-search-btn');
+  btn.textContent = '搜尋中…'; btn.disabled = true;
+  const isFund = el('i-cat').value === '基金';
+
+  try {
+    const resEl = el('i-fund-results');
+    let rows = [];
+
+    if (isFund) {
+      // ① MoneyDJ 搜尋（台灣共同基金）
+      rows = await searchMoneyDJFunds(name);
+    }
+
+    if (!rows.length) {
+      // ② 備援：Yahoo Finance（境外基金 / ETF）
+      const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(name)}&lang=zh-TW&quotesCount=6&newsCount=0&listsCount=0`;
+      let data = null;
+      try { const r = await ft(url); if (r.ok) data = await r.json(); } catch(e) {}
+      if (!data) {
+        try {
+          const r2 = await ft(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, 12000);
+          if (r2.ok) { const w = await r2.json(); data = JSON.parse(w.contents); }
+        } catch(e) {}
+      }
+      rows = (data?.quotes || [])
+        .filter(q => q.symbol && (q.longname || q.shortname))
+        .map(q => ({
+          code: q.symbol,
+          name: q.longname || q.shortname || '',
+          type: q.quoteType === 'MUTUALFUND' ? '境外基金' : q.quoteType === 'ETF' ? 'ETF' : q.typeDisp || ''
+        }));
+    }
+
+    if (!rows.length) { resEl.style.display = 'none'; toast('找不到結果，請嘗試不同關鍵字'); return; }
+
+    resEl.innerHTML = rows.map(r => {
+      const nm = r.name.replace(/</g, '&lt;');
+      const cd = r.code.replace(/'/g, '\\\'');
+      return `<div onclick="selectFundResult('${cd}')"
+                   style="padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;display:flex;gap:8px;align-items:baseline;font-size:13px;">
+        <span style="font-weight:700;color:var(--blue);flex-shrink:0">${r.code}</span>
+        <span style="color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</span>
+        <span style="font-size:11px;color:var(--gray);flex-shrink:0">${r.type||''}</span>
+      </div>`;
+    }).join('');
+    resEl.style.display = 'block';
+  } catch(e) {
+    toast('搜尋失敗，請稍後再試');
+  } finally {
+    btn.textContent = '搜尋'; btn.disabled = false;
+  }
+}
+
+async function searchMoneyDJFunds(query) {
+  try {
+    const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(query)}`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r = await ft(proxyUrl, 15000);
+    if (!r.ok) return [];
+    const w = await r.json();
+    const html = w.contents || '';
+
+    // 解析搜尋結果：MoneyDJ 列表頁的基金連結格式
+    // href="...yp011000.djhtm?a={code}" 之後文字是基金名稱
+    const results = [];
+    const seen = new Set();
+    const re = /yp011000\.djhtm\?a=([a-z0-9]+)[^>]*>([^<]+)</gi;
+    let m;
+    while ((m = re.exec(html)) !== null && results.length < 8) {
+      const code = m[1].toUpperCase();
+      const name = m[2].trim();
+      if (!seen.has(code) && name.length > 1) {
+        seen.add(code);
+        results.push({ code, name, type: '國內基金' });
+      }
+    }
+    return results;
+  } catch(e) {}
+  return [];
+}
+
+function selectFundResult(symbol) {
+  el('i-ticker').value = symbol;
+  el('i-fund-results').style.display = 'none';
+  toast(`代號已填入：${symbol}`);
 }
 
 // 帶 timeout 的 fetch（預設 8 秒）
