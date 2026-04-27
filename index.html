@@ -1638,7 +1638,27 @@ async function openFundSearch() {
         }));
     }
 
-    if (!rows.length) { resEl.style.display = 'none'; toast('找不到結果，請嘗試不同關鍵字'); return; }
+    if (!rows.length) {
+      resEl.style.display = 'none';
+      if (isFund) {
+        const mdUrl = `https://www.moneydj.com/funddj/yp/yp011000.djhtm?a=${encodeURIComponent(name)}`;
+        resEl.innerHTML = `<div style="padding:12px 14px;font-size:13px;line-height:1.8">
+          <div style="color:#555">找不到「${name.replace(/</g,'&lt;')}」的搜尋結果</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:2px">
+            台灣國內基金請：到 MoneyDJ 查詢代號 → 填入上方「基金代號」欄位
+          </div>
+          <a href="${mdUrl}" target="_blank" rel="noopener"
+             style="display:inline-block;margin-top:8px;padding:6px 14px;background:var(--blue);
+                    color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">
+            在 MoneyDJ 查詢 ↗
+          </a>
+        </div>`;
+        resEl.style.display = 'block';
+      } else {
+        toast('找不到結果，請嘗試不同關鍵字');
+      }
+      return;
+    }
 
     resEl.innerHTML = rows.map(r => {
       const nm = r.name.replace(/</g, '&lt;');
@@ -1659,23 +1679,29 @@ async function openFundSearch() {
 }
 
 async function searchMoneyDJFunds(query) {
+  // ① 純英數字 → 可能是基金代號，直接驗證
+  if (/^[a-zA-Z0-9]{4,8}$/.test(query.trim())) {
+    const result = await verifyMoneyDJCode(query.trim().toLowerCase());
+    if (result) return [result];
+  }
+
+  // ② 中文搜尋只取前 2 字（公司名），避免 proxy 對長中文 URL 逾時
   try {
-    const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(query)}`;
+    const searchTerm = /[一-鿿]/.test(query) ? query.slice(0, 2) : query;
+    const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(searchTerm)}`;
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
     const r = await ft(proxyUrl, 15000);
     if (!r.ok) return [];
     const w = await r.json();
     const html = w.contents || '';
 
-    // 解析搜尋結果：MoneyDJ 列表頁的基金連結格式
-    // href="...yp011000.djhtm?a={code}" 之後文字是基金名稱
     const results = [];
     const seen = new Set();
-    const re = /yp011000\.djhtm\?a=([a-z0-9]+)[^>]*>([^<]+)</gi;
+    const re = /yp011000\.djhtm\?a=([a-z0-9]{4,8})[^>]*>([^<]{2,40})</gi;
     let m;
     while ((m = re.exec(html)) !== null && results.length < 8) {
       const code = m[1].toUpperCase();
-      const name = m[2].trim();
+      const name = m[2].trim().replace(/&[a-z]+;/gi, '');
       if (!seen.has(code) && name.length > 1) {
         seen.add(code);
         results.push({ code, name, type: '國內基金' });
@@ -1684,6 +1710,25 @@ async function searchMoneyDJFunds(query) {
     return results;
   } catch(e) {}
   return [];
+}
+
+// 驗證 MoneyDJ 代號並回傳基金名稱
+async function verifyMoneyDJCode(code) {
+  try {
+    const url = `https://m.moneydj.com/a1.aspx?a=${encodeURIComponent(code)}`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r = await ft(proxyUrl, 10000);
+    if (!r.ok) return null;
+    const w = await r.json();
+    const html = w.contents || '';
+    if (!html || html.includes('查無資料')) return null;
+    const m = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (!m) return null;
+    const title = m[1].replace(/[\s\-–|]*MoneyDJ[^<]*/gi, '').replace(/[\s\-–|]*理財網.*/g, '').trim();
+    if (!title || title.length < 2) return null;
+    return { code: code.toUpperCase(), name: title, type: '國內基金' };
+  } catch(e) {}
+  return null;
 }
 
 function selectFundResult(symbol) {
