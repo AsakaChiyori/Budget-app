@@ -474,6 +474,22 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 </div>
 
+<!-- ═══════════ MANUAL PRICE MODAL ═══════════ -->
+<div class="ov" id="manualPriceModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('manualPriceModal')">取消</button>
+      <div class="m-title" id="mp-title" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;"></div>
+      <button class="m-btn" onclick="saveManualPrice()">儲存</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">手動現價</label><input type="number" class="finput" id="mp-price" placeholder="0.00" min="0" step="0.01" inputmode="decimal"></div>
+    </div></div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
 <!-- ═══════════ INVEST MODAL ═══════════ -->
 <div class="ov" id="invModal">
   <div class="modal">
@@ -1101,10 +1117,30 @@ function renderInv(){
     const sym=toYahooSym(h.item,h.cat,h.ticker);
     const displaySym=sym||h.ticker||'';
     const tickerTag=displaySym?`<span style="font-size:11px;background:#F0F0FF;color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${displaySym}</span>`:``;
-    return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--gray2)">現價 ${h.cur} · 市值 ${fmt(h.mv)}</div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
+    const escItem=h.item.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--blue);cursor:pointer;" onclick="openManualPrice('${escItem}',${h.cur})">現價 ${h.cur} · 市值 ${fmt(h.mv)} <span style="font-size:10px;">✎</span></div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
   }).join('');
   const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
   el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="openEditInv(${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
+}
+
+// ── 手動更新現價 ──────────────────────────────────────────────
+let _mpItem = null;
+function openManualPrice(item, cur) {
+  _mpItem = item;
+  el('mp-title').textContent = item;
+  el('mp-price').value = cur || '';
+  el('manualPriceModal').classList.add('on');
+  syncFab();
+  setTimeout(() => el('mp-price').select(), 80);
+}
+function saveManualPrice() {
+  const price = parseFloat(el('mp-price').value);
+  if (!price || price <= 0) { toast('請輸入有效的現價'); return; }
+  D.inv.forEach(t => { if (t.item === _mpItem) t.cur = price; });
+  save(); renderInv(); renderOv();
+  closeOv('manualPriceModal');
+  toast('現價已更新');
 }
 
 // ── DELETE ────────────────────────────────────────────────────
@@ -1502,7 +1538,7 @@ async function fetchPrices() {
     const holds = calcInvHolds();
     if (Object.keys(holds).length === 0) return;
 
-    let n = 0, noCode = 0;
+    let n = 0, noCode = 0, failed = 0;
     for (const h of Object.values(holds)) {
       try {
         // 台灣共同基金（MoneyDJ）：cat=基金 且代號不含點
@@ -1511,7 +1547,7 @@ async function fetchPrices() {
           if (price !== null) {
             D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
             n++;
-          }
+          } else { failed++; }
           continue;
         }
         // 股票 / ETF / 境外基金：Yahoo Finance
@@ -1521,12 +1557,21 @@ async function fetchPrices() {
         if (price !== null) {
           D.inv.forEach(t => { if (t.item === h.item) t.cur = price; });
           n++;
-        }
-      } catch(e) { /* 單一標的失敗不影響其他 */ }
+        } else { failed++; }
+      } catch(e) { failed++; }
     }
-    if (n > 0) { setLU('prices'); save(); toast(noCode ? `已更新 ${n} 檔，${noCode} 檔未填代號` : `股價已更新 ${n} 檔`); }
-    else if (noCode) toast(`${noCode} 檔持倉尚未填入代號`);
-    else toast('價格取得失敗，請稍後再試');
+    if (n > 0) {
+      setLU('prices'); save(); renderInv(); renderOv();
+      const parts = [`已更新 ${n} 檔`];
+      if (failed > 0) parts.push(`${failed} 檔失敗`);
+      if (noCode > 0) parts.push(`${noCode} 檔未填代號`);
+      toast(parts.join('，'));
+    } else {
+      const parts = [];
+      if (failed > 0) parts.push(`${failed} 檔價格取得失敗`);
+      if (noCode > 0) parts.push(`${noCode} 檔未填代號`);
+      toast(parts.length ? parts.join('，') : '無法更新，請稍後再試');
+    }
   } catch(e) {
     console.warn('股價更新失敗', e);
   }
