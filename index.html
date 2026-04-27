@@ -1574,17 +1574,16 @@ async function getYahooPrice(symbol) {
   return null;
 }
 
-// ── 台灣共同基金淨值（MoneyDJ mobile，allorigins proxy）──────────
+// ── 台灣共同基金淨值（MoneyDJ 桌面版淨值表，allorigins proxy）──────────
 async function fetchMoneyDJFundNav(code) {
-  const url = `https://m.moneydj.com/a1.aspx?a=${encodeURIComponent(code.toLowerCase())}`;
+  const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(code.toUpperCase())}`;
   try {
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
     const r = await ft(proxyUrl, 15000);
     if (!r.ok) return null;
-    const w = await r.json();
-    const html = w.contents || '';
-    // HTML: <span class="increase">675.83</span> 或 class="decrease"
-    const m = html.match(/class="(?:increase|decrease)">([\d,]+\.?\d*)<\/span>/);
+    const { contents: html } = await r.json();
+    // 淨值表：<td class="t3n1">675.8300</td>（第一個 t3n1 為最新淨值）
+    const m = (html || '').match(/class="t3n1">([\d,]+\.?\d*)<\/td>/);
     if (m) return parseFloat(m[1].replace(/,/g, ''));
   } catch(e) {}
   return null;
@@ -1641,16 +1640,16 @@ async function openFundSearch() {
     if (!rows.length) {
       resEl.style.display = 'none';
       if (isFund) {
-        const mdUrl = `https://www.moneydj.com/funddj/yp/yp011000.djhtm?a=${encodeURIComponent(name)}`;
+        const mdUrl = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(name)}`;
         resEl.innerHTML = `<div style="padding:12px 14px;font-size:13px;line-height:1.8">
           <div style="color:#555">找不到「${name.replace(/</g,'&lt;')}」的搜尋結果</div>
           <div style="font-size:12px;color:var(--gray);margin-top:2px">
-            台灣國內基金請：到 MoneyDJ 查詢代號 → 填入上方「基金代號」欄位
+            台灣國內基金：開啟 MoneyDJ 後，在「基金資訊」區找到代號（英數字，如 ALXX01），再填入上方「基金代號」欄位
           </div>
           <a href="${mdUrl}" target="_blank" rel="noopener"
              style="display:inline-block;margin-top:8px;padding:6px 14px;background:var(--blue);
                     color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">
-            在 MoneyDJ 查詢 ↗
+            開啟 MoneyDJ 頁面 ↗
           </a>
         </div>`;
         resEl.style.display = 'block';
@@ -1660,7 +1659,7 @@ async function openFundSearch() {
       return;
     }
 
-    resEl.innerHTML = rows.map(r => {
+    resEl.innerHTML = rows.filter(r => r && r.code && r.name).map(r => {
       const nm = r.name.replace(/</g, '&lt;');
       const cd = r.code.replace(/'/g, '\\\'');
       return `<div onclick="selectFundResult('${cd}')"
@@ -1679,54 +1678,37 @@ async function openFundSearch() {
 }
 
 async function searchMoneyDJFunds(query) {
-  // ① 純英數字 → 可能是基金代號，直接驗證
+  // 純英數字代號（如 ACDD04）→ 直接驗證並取名稱
   if (/^[a-zA-Z0-9]{4,8}$/.test(query.trim())) {
-    const result = await verifyMoneyDJCode(query.trim().toLowerCase());
+    const result = await verifyMoneyDJCode(query.trim());
     if (result) return [result];
   }
-
-  // ② 中文搜尋只取前 2 字（公司名），避免 proxy 對長中文 URL 逾時
-  try {
-    const searchTerm = /[一-鿿]/.test(query) ? query.slice(0, 2) : query;
-    const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(searchTerm)}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const r = await ft(proxyUrl, 15000);
-    if (!r.ok) return [];
-    const w = await r.json();
-    const html = w.contents || '';
-
-    const results = [];
-    const seen = new Set();
-    const re = /yp011000\.djhtm\?a=([a-z0-9]{4,8})[^>]*>([^<]{2,40})</gi;
-    let m;
-    while ((m = re.exec(html)) !== null && results.length < 8) {
-      const code = m[1].toUpperCase();
-      const name = m[2].trim().replace(/&[a-z]+;/gi, '');
-      if (!seen.has(code) && name.length > 1) {
-        seen.add(code);
-        results.push({ code, name, type: '國內基金' });
-      }
-    }
-    return results;
-  } catch(e) {}
+  // 中文名稱：MoneyDJ 搜尋頁為 JS 渲染，無法透過 proxy 抓取基金清單
   return [];
 }
 
-// 驗證 MoneyDJ 代號並回傳基金名稱
+// 驗證 MoneyDJ 代號並回傳基金名稱（使用桌面版淨值表頁，含 meta 資料）
 async function verifyMoneyDJCode(code) {
+  const c = code.toUpperCase();
   try {
-    const url = `https://m.moneydj.com/a1.aspx?a=${encodeURIComponent(code)}`;
+    const url = `https://www.moneydj.com/funddj/yf/yp010000.djhtm?a=${encodeURIComponent(c)}`;
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const r = await ft(proxyUrl, 10000);
+    const r = await ft(proxyUrl, 12000);
     if (!r.ok) return null;
-    const w = await r.json();
-    const html = w.contents || '';
-    if (!html || html.includes('查無資料')) return null;
-    const m = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    if (!m) return null;
-    const title = m[1].replace(/[\s\-–|]*MoneyDJ[^<]*/gi, '').replace(/[\s\-–|]*理財網.*/g, '').trim();
-    if (!title || title.length < 2) return null;
-    return { code: code.toUpperCase(), name: title, type: '國內基金' };
+    const { contents: html } = await r.json();
+    if (!html) return null;
+    // keywords meta："安聯台灣科技基金,安聯投信,..." → 取第一個逗號前的名稱
+    const km = html.match(/name="keywords"\s+content="([^"]*)"/i);
+    if (km) {
+      const name = km[1].split(',')[0].trim();
+      if (name.length > 1) return { code: c, name, type: '國內基金' };
+    }
+    // fallback：og:title 取第一段（'-' 前）
+    const og = html.match(/property="og:title"\s+content="([^"]*)"/i);
+    if (og) {
+      const name = og[1].split('-')[0].trim();
+      if (name.length > 1) return { code: c, name, type: '國內基金' };
+    }
   } catch(e) {}
   return null;
 }
