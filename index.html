@@ -646,6 +646,60 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 </div>
 
+<!-- ═══════════ ADD SHEET (FX) ═══════════ -->
+<div class="ov" id="fxAddSheet">
+  <div class="modal" style="padding-bottom:16px;">
+    <div class="m-handle"></div>
+    <div class="m-hdr" style="padding-bottom:4px;">
+      <div style="width:44px"></div>
+      <div class="m-title">新增</div>
+      <button class="m-btn cancel" onclick="closeOv('fxAddSheet')">取消</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow" style="cursor:pointer;gap:14px;" onclick="closeOv('fxAddSheet');openFxModal()">
+        <div style="font-size:24px;width:36px;text-align:center;">💱</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:500;">新增外幣交易</div><div style="font-size:12px;color:var(--gray);margin-top:1px;">記錄買入或賣出外幣</div></div>
+        <div style="color:var(--gray3);font-size:18px;">›</div>
+      </div>
+      <div class="frow" style="cursor:pointer;gap:14px;" onclick="closeOv('fxAddSheet');openFxTransferModal()">
+        <div style="font-size:24px;width:36px;text-align:center;">🔄</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:500;">帳戶轉帳</div><div style="font-size:12px;color:var(--gray);margin-top:1px;">外幣現鈔與外幣銀行帳戶之間轉移</div></div>
+        <div style="color:var(--gray3);font-size:18px;">›</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══════════ FX TRANSFER MODAL ═══════════ -->
+<div class="ov" id="fxTransferModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('fxTransferModal')">取消</button>
+      <div class="m-title" id="fxTransferModal-title">外幣帳戶轉帳</div>
+      <button class="m-btn" onclick="saveFxTransfer()">儲存</button>
+    </div>
+    <div class="fsec"><div class="fcard">
+      <div class="frow"><label class="flabel">日期</label><input type="date" class="finput" id="fxt-date"></div>
+      <div class="frow"><label class="flabel">備註</label><input type="text" class="finput" id="fxt-item" placeholder="轉帳說明（選填）"></div>
+      <div class="frow"><label class="flabel">幣別</label><select class="finput" id="fxt-cur"></select></div>
+      <div class="frow"><label class="flabel">金額</label><input type="number" class="finput" id="fxt-amt" placeholder="0" min="0"></div>
+      <div class="frow"><label class="flabel">從帳戶</label><select class="finput" id="fxt-from">
+        <option value="外幣現鈔">外幣現鈔</option>
+        <option value="外幣銀行帳戶">外幣銀行帳戶</option>
+      </select></div>
+      <div class="frow"><label class="flabel">到帳戶</label><select class="finput" id="fxt-to">
+        <option value="外幣銀行帳戶">外幣銀行帳戶</option>
+        <option value="外幣現鈔">外幣現鈔</option>
+      </select></div>
+    </div></div>
+    <div id="fxTransferModal-del" style="display:none;padding:0 16px;">
+      <button onclick="delEditTx('fxTransfer')" style="width:100%;padding:14px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;">刪除此轉帳</button>
+    </div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
 </div><!-- #app -->
 
 <!-- Firebase SDK（compat 版，支援一般 <script> 使用） -->
@@ -809,7 +863,7 @@ function goPage(p){
 }
 function openAdd(){
   if(curPage==='invest') openInvModal();
-  else if(curPage==='fx') openFxModal();
+  else if(curPage==='fx'){ el('fxAddSheet').classList.add('on'); syncFab(); }
   else if(curPage==='general'){ el('addSheet').classList.add('on'); syncFab(); }
   else openGenModal();
 }
@@ -836,9 +890,15 @@ function calcFxHolds(){
   const h={};
   D.fx.forEach(t=>{
     if(!h[t.currency]) h[t.currency]={cash:0,bank:0};
-    const amt= t.bs==='買' ? +t.fxAmt : -(+t.fxAmt);
-    if(t.acctType==='外幣現鈔') h[t.currency].cash+=amt;
-    else h[t.currency].bank+=amt;
+    if(t.linked==='fxTransfer'){
+      const amt=+t.fxAmt||0;
+      if(t.fromAcct==='外幣現鈔') h[t.currency].cash-=amt; else h[t.currency].bank-=amt;
+      if(t.toAcct==='外幣現鈔') h[t.currency].cash+=amt; else h[t.currency].bank+=amt;
+    } else {
+      const amt= t.bs==='買' ? +t.fxAmt : -(+t.fxAmt);
+      if(t.acctType==='外幣現鈔') h[t.currency].cash+=amt;
+      else h[t.currency].bank+=amt;
+    }
   });
   return h;
 }
@@ -1029,7 +1089,7 @@ function renderFx(){
   renderFxSummaryIn(el('fx-holds'));
   // Period-filtered transactions
   let txs=D.fx.filter(inFxPeriod);
-  if(fxFilter==='外幣現鈔'||fxFilter==='外幣銀行帳戶') txs=txs.filter(t=>t.acctType===fxFilter);
+  if(fxFilter==='外幣現鈔'||fxFilter==='外幣銀行帳戶') txs=txs.filter(t=>t.linked==='fxTransfer'?(t.fromAcct===fxFilter||t.toAcct===fxFilter):t.acctType===fxFilter);
   else if(fxFilter!=='all') txs=txs.filter(t=>t.currency===fxFilter);
   txs.sort((a,b)=>b.date.localeCompare(a.date));
   // Period summary: TWD spent buying / TWD received selling
@@ -1053,24 +1113,36 @@ function renderFx(){
     const d=new Date(date+'T00:00:00');
     html+=`<div class="dg-hdr">${d.getMonth()+1}月${d.getDate()}日 週${WD[d.getDay()]}</div>`;
     list.forEach(t=>{
-      const isBuy=t.bs==='買';
-      const rate=D.fxRates[t.currency]||0;
-      const impliedRate=t.fxAmt&&t.twdAmt?(+t.twdAmt/+t.fxAmt).toFixed(4):'—';
-      html+=`<div class="tx" onclick="openEditFx(${t.id})">
-        <div class="tx-ic">${isBuy?'💰':'💸'}</div>
-        <div class="tx-main">
-          <div class="tx-name">
-            <span class="badge ${isBuy?'b-buy':'b-sell'}" style="margin-right:4px;">${isBuy?'買入':'賣出/支出'}</span>${t.item}
+      if(t.linked==='fxTransfer'){
+        html+=`<div class="tx" onclick="openEditFxTransfer(${t.id})">
+          <div class="tx-ic">🔄</div>
+          <div class="tx-main">
+            <div class="tx-name">${t.item||'外幣轉帳'}</div>
+            <div class="tx-sub">${t.fromAcct} → ${t.toAcct} · ${t.currency}</div>
           </div>
-          <div class="tx-sub">${t.acctType} · ${t.currency} · 匯率 ${impliedRate}</div>
-        </div>
-        <div class="tx-right">
-          <div style="font-size:14px;font-weight:600;color:${isBuy?'var(--red)':'var(--green)'}">
-            ${isBuy?'−':'+'}${fmt(t.twdAmt||0)}
+          <div class="tx-right">
+            <div style="font-size:14px;font-weight:600;color:var(--gray)">${fmtN(t.fxAmt)} ${t.currency}</div>
           </div>
-          <div style="font-size:11px;color:var(--gray)">${isBuy?'+':'−'}${fmtN(t.fxAmt)} ${t.currency}</div>
-        </div>
-      </div>`;
+        </div>`;
+      } else {
+        const isBuy=t.bs==='買';
+        const impliedRate=t.fxAmt&&t.twdAmt?(+t.twdAmt/+t.fxAmt).toFixed(4):'—';
+        html+=`<div class="tx" onclick="openEditFx(${t.id})">
+          <div class="tx-ic">${isBuy?'💰':'💸'}</div>
+          <div class="tx-main">
+            <div class="tx-name">
+              <span class="badge ${isBuy?'b-buy':'b-sell'}" style="margin-right:4px;">${isBuy?'買入':'賣出/支出'}</span>${t.item}
+            </div>
+            <div class="tx-sub">${t.acctType} · ${t.currency} · 匯率 ${impliedRate}</div>
+          </div>
+          <div class="tx-right">
+            <div style="font-size:14px;font-weight:600;color:${isBuy?'var(--red)':'var(--green)'}">
+              ${isBuy?'−':'+'}${fmt(t.twdAmt||0)}
+            </div>
+            <div style="font-size:11px;color:var(--gray)">${isBuy?'+':'−'}${fmtN(t.fxAmt)} ${t.currency}</div>
+          </div>
+        </div>`;
+      }
     });
   });
   listEl.innerHTML=html;
@@ -1166,6 +1238,8 @@ function delEditTx(type){
     D.inv=D.inv.filter(t=>t.id!==id); closeOv('invModal'); renderInv(); renderGen();
   } else if(type==='transfer'){
     D.gen=D.gen.filter(t=>t.id!==id); closeOv('transferModal'); renderGen(); renderOv();
+  } else if(type==='fxTransfer'){
+    D.fx=D.fx.filter(t=>t.id!==id); closeOv('fxTransferModal'); renderFx();
   }
   save(); toast('已刪除');
 }
@@ -1362,6 +1436,43 @@ function saveTransfer(){
   } else {
     D.gen.push({id:Date.now(),...rec});
     save(); closeOv('transferModal'); renderGen(); renderOv(); toast('已新增轉帳');
+  }
+}
+
+// ── FX TRANSFER MODAL ────────────────────────────────────────
+function openFxTransferModal(){
+  _editId=null;
+  el('fxTransferModal-title').textContent='外幣帳戶轉帳'; el('fxTransferModal-del').style.display='none';
+  el('fxt-date').value=todayStr(); el('fxt-item').value=''; el('fxt-amt').value='';
+  el('fxt-cur').innerHTML=Object.keys(D.fxRates).map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('fxt-from').value='外幣現鈔'; el('fxt-to').value='外幣銀行帳戶';
+  el('fxTransferModal').classList.add('on'); syncFab();
+}
+function openEditFxTransfer(id){
+  const t=D.fx.find(x=>x.id===id); if(!t)return;
+  _editId=id;
+  el('fxTransferModal-title').textContent='編輯外幣轉帳'; el('fxTransferModal-del').style.display='block';
+  el('fxt-cur').innerHTML=Object.keys(D.fxRates).map(c=>`<option value="${c}">${c}</option>`).join('');
+  el('fxt-date').value=t.date; el('fxt-item').value=t.item==='外幣轉帳'?'':t.item;
+  el('fxt-cur').value=t.currency; el('fxt-amt').value=t.fxAmt||'';
+  el('fxt-from').value=t.fromAcct||'外幣現鈔'; el('fxt-to').value=t.toAcct||'外幣銀行帳戶';
+  el('fxTransferModal').classList.add('on'); syncFab();
+}
+function saveFxTransfer(){
+  const date=v('fxt-date'),item=v('fxt-item').trim()||'外幣轉帳';
+  const currency=v('fxt-cur'),fxAmt=+v('fxt-amt')||0;
+  const fromAcct=v('fxt-from'),toAcct=v('fxt-to');
+  if(!date){toast('請填寫日期');return;}
+  if(fromAcct===toAcct){toast('來源與目標帳戶不能相同');return;}
+  if(fxAmt<=0){toast('請填寫金額');return;}
+  const rec={date,item,currency,fxAmt,twdAmt:0,fromAcct,toAcct,linked:'fxTransfer'};
+  if(_editId!==null){
+    const idx=D.fx.findIndex(t=>t.id===_editId);
+    if(idx>=0) D.fx[idx]={id:_editId,...rec};
+    _editId=null; save(); closeOv('fxTransferModal'); renderFx(); toast('已更新外幣轉帳');
+  } else {
+    D.fx.push({id:Date.now(),...rec});
+    save(); closeOv('fxTransferModal'); renderFx(); toast('已新增外幣轉帳');
   }
 }
 

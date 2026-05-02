@@ -1,6 +1,6 @@
 // Service Worker — 讓 App 可離線使用
 // 只要版本號有變，activate 時就會清掉舊快取
-const CACHE = 'budget-app-v12';
+const CACHE = 'budget-app-v13';
 
 // 靜態資源（不常變動，用 Cache First）
 const STATIC = ['./manifest.json', './icon-192.png', './icon-512.png'];
