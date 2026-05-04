@@ -892,8 +892,9 @@ function seed(){
 // ── STATE ────────────────────────────────────────────────────
 let curPage='overview';
 let ovMode='month', ovY=2026, ovM=4;
-let genMode='month', genY=2026, genM=4, genFilter='all';
-let fxMode='month',  fxY=2026,  fxM=4,  fxFilter='all';
+const _now = new Date();
+let genMode='month', genY=_now.getFullYear(), genM=_now.getMonth()+1, genFilter='all';
+let fxMode='month',  fxY=_now.getFullYear(),  fxM=_now.getMonth()+1,  fxFilter='all';
 
 // ── NAVIGATION ───────────────────────────────────────────────
 function goPage(p){
