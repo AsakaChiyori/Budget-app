@@ -19,19 +19,38 @@
   --gray:#8E8E93;--gray2:#AEAEB2;--gray3:#C7C7CC;
   --gray4:#D1D1D6;--gray5:#E5E5EA;--gray6:#F2F2F7;
   --card:#FFFFFF;
+  --surface:#FFFFFF;
+  --text-primary:#1C1C1E;
+  --hdr-bg:rgba(242,242,247,.95);
+  --seg-on-bg:#FFFFFF;--seg-on-text:#000000;
+  --b-buy-bg:#FFE5E5;--b-sell-bg:#E5F5EB;
+  --fx-badge-bg:#F0F0FF;
+  --info-bg:#EAF4FF;--warn-bg:#FFF5E5;
   /* 底部安全區域（Home Bar）高度 */
   --sab: env(safe-area-inset-bottom, 20px);
   /* Tab bar 總高度 = 內容區 63px + 底部安全區域 */
   --tab-h: calc(63px + env(safe-area-inset-bottom, 20px));
 }
+[data-theme="dark"]{
+  --gray6:#1C1C1E;--gray5:#2C2C2E;--gray4:#3A3A3C;
+  --gray3:#48484A;--gray2:#636366;
+  --card:#2C2C2E;
+  --surface:#2C2C2E;
+  --text-primary:#FFFFFF;
+  --hdr-bg:rgba(28,28,30,.95);
+  --seg-on-bg:#3A3A3C;--seg-on-text:#EBEBF5;
+  --b-buy-bg:rgba(255,59,48,.2);--b-sell-bg:rgba(52,199,89,.2);
+  --fx-badge-bg:rgba(175,82,222,.2);
+  --info-bg:rgba(0,122,255,.15);--warn-bg:rgba(255,149,0,.15);
+}
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
-  background:var(--gray6);max-width:430px;margin:0 auto;
-  min-height:100vh;overflow-x:hidden;position:relative;
+  background:var(--gray6);color:var(--text-primary);max-width:430px;margin:0 auto;
+  min-height:100vh;overflow-x:clip;position:relative;
 }
 /* HEADER — 頂部安全區域（瀏海/動態島）*/
 .hdr{
-  background:rgba(242,242,247,.95);backdrop-filter:blur(10px);
+  background:var(--hdr-bg);backdrop-filter:blur(10px);
   position:sticky;top:0;z-index:100;
   padding:calc(14px + env(safe-area-inset-top, 0px)) 20px 10px;
   border-bottom:.5px solid var(--gray4);
@@ -43,7 +62,7 @@ body{
 .tabbar{
   position:fixed;bottom:0;left:50%;transform:translateX(-50%);
   width:100%;max-width:430px;
-  background:rgba(242,242,247,.95);backdrop-filter:blur(10px);
+  background:var(--hdr-bg);backdrop-filter:blur(10px);
   border-top:.5px solid var(--gray4);
   display:flex;height:var(--tab-h);
   padding-bottom:env(safe-area-inset-bottom,20px);z-index:100;
@@ -109,17 +128,17 @@ body{
 .m-btn.cancel{color:var(--gray);}
 /* FORM */
 .fsec{margin:10px 16px 0;}
-.fcard{background:#fff;border-radius:12px;overflow:hidden;}
+.fcard{background:var(--surface);border-radius:12px;overflow:hidden;}
 .frow{display:flex;align-items:center;padding:11px 16px;border-bottom:.5px solid var(--gray5);gap:12px;min-height:44px;}
 .frow:last-child{border-bottom:none;}
 .flabel{font-size:15px;white-space:nowrap;min-width:76px;}
-.finput{flex:1;border:none;outline:none;font-size:15px;text-align:right;background:transparent;color:#000;font-family:inherit;}
+.finput{flex:1;border:none;outline:none;font-size:15px;text-align:right;background:transparent;color:var(--text-primary);font-family:inherit;}
 .finput::placeholder{color:var(--gray3);}
 select.finput{-webkit-appearance:none;cursor:pointer;}
 /* SEGMENT */
 .seg{display:flex;background:var(--gray5);border-radius:9px;padding:2px;}
 .seg-btn{flex:1;padding:6px 4px;border:none;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--gray);transition:all .15s;font-family:inherit;}
-.seg-btn.on{background:#fff;color:#000;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.seg-btn.on{background:var(--seg-on-bg);color:var(--seg-on-text);box-shadow:0 1px 3px rgba(0,0,0,.15);}
 /* PERIOD */
 .period{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0 4px;}
 .period-btn{background:none;border:none;font-size:22px;cursor:pointer;color:var(--blue);line-height:1;padding:4px 12px;}
@@ -127,7 +146,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 /* SCROLL TABS */
 .stabs{display:flex;overflow-x:auto;gap:8px;scrollbar-width:none;padding:10px 16px;}
 .stabs::-webkit-scrollbar{display:none;}
-.stab{padding:6px 14px;border-radius:16px;font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;background:#fff;border:1.5px solid var(--gray4);color:var(--gray);flex-shrink:0;transition:all .15s;}
+.stab{padding:6px 14px;border-radius:16px;font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;background:var(--surface);border:1.5px solid var(--gray4);color:var(--gray);flex-shrink:0;transition:all .15s;}
 .stab.on{background:var(--blue);border-color:var(--blue);color:#fff;}
 /* INVEST ROWS */
 .inv-row{display:flex;align-items:flex-start;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:8px;cursor:pointer;}
@@ -142,10 +161,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .pos{color:var(--red);}
 .neg{color:var(--green);}
 .badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;}
-.b-buy{background:#FFE5E5;color:var(--red);}
-.b-sell{background:#E5F5EB;color:var(--green);}
+.b-buy{background:var(--b-buy-bg);color:var(--red);}
+.b-sell{background:var(--b-sell-bg);color:var(--green);}
 /* FX SPECIFIC */
-.fx-cur-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:700;background:#F0F0FF;color:var(--purple);margin-right:4px;}
+.fx-cur-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:700;background:var(--fx-badge-bg);color:var(--purple);margin-right:4px;}
 /* PROGRESS */
 .prog{height:5px;background:var(--gray5);border-radius:3px;overflow:hidden;margin:5px 0 2px;}
 .prog-fill{height:100%;border-radius:3px;}
@@ -157,7 +176,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .sort-btn{color:var(--gray2);background:none;border:none;font-size:15px;cursor:pointer;line-height:1;padding:0 3px;flex-shrink:0;}
 .sort-btn:disabled{opacity:.2;cursor:default;}
 /* INLINE ADD ROW */
-.add-row{display:flex;align-items:center;padding:10px 16px;background:#fff;border-radius:12px;margin-top:8px;}
+.add-row{display:flex;align-items:center;padding:10px 16px;background:var(--surface);border-radius:12px;margin-top:8px;}
 .add-input{flex:1;border:none;outline:none;font-size:15px;background:transparent;font-family:inherit;}
 .add-input::placeholder{color:var(--gray3);}
 .add-btn{color:var(--blue);background:none;border:none;font-size:22px;cursor:pointer;line-height:1;padding:0 0 0 8px;flex-shrink:0;}
@@ -169,8 +188,8 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .empty-ic{font-size:44px;margin-bottom:10px;}
 .empty-tx{font-size:15px;line-height:1.6;}
 /* INFO BANNER */
-.info-banner{background:#EAF4FF;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--blue);margin:8px 16px 0;line-height:1.5;}
-.warn-banner{background:#FFF5E5;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--orange);margin:8px 16px 0;line-height:1.5;}
+.info-banner{background:var(--info-bg);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--blue);margin:8px 16px 0;line-height:1.5;}
+.warn-banner{background:var(--warn-bg);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--orange);margin:8px 16px 0;line-height:1.5;}
 /* RATE ROW */
 .rate-row{display:flex;align-items:center;padding:10px 16px;border-bottom:.5px solid var(--gray5);gap:8px;}
 .rate-row:last-child{border-bottom:none;}
@@ -178,13 +197,19 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .rate-val{flex:1;border:none;outline:none;font-size:15px;background:transparent;text-align:right;font-family:inherit;}
 .rate-unit{font-size:13px;color:var(--gray);white-space:nowrap;}
 </style>
+<script>
+(function(){
+  const t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  if(t==='dark')document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
 </head>
 <body>
 <!-- Loading 畫面（Firebase 連線中） -->
-<div id="loading-overlay" style="position:fixed;inset:0;background:#F2F2F7;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+<div id="loading-overlay" style="position:fixed;inset:0;background:var(--gray6);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:56px;">💰</div>
-  <div style="font-size:18px;font-weight:700;color:#1C1C1E;">記帳工具</div>
-  <div style="font-size:14px;color:#8E8E93;">連線中…</div>
+  <div style="font-size:18px;font-weight:700;color:var(--text-primary);">記帳工具</div>
+  <div style="font-size:14px;color:var(--gray);">連線中…</div>
 </div>
 <div id="app">
 <div class="toast" id="toast"></div>
@@ -196,6 +221,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     <div style="display:flex;gap:8px;align-items:center;">
       <button class="refresh-btn" id="refresh-btn" onclick="autoUpdate()">↻ 更新</button>
       <button class="refresh-btn" onclick="openSyncModal()">🔗 同步</button>
+      <button class="refresh-btn" id="theme-btn" onclick="toggleDarkMode()" style="font-size:18px;padding:2px 0 6px;">🌙</button>
     </div>
   </div>
 
@@ -224,7 +250,10 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
   </div>
 
   <div class="sec" style="margin-top:14px;">
-    <div class="sec-title">帳戶分佈</div>
+    <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
+      帳戶分佈
+      <button onclick="openAcctSort()" style="background:none;border:none;color:var(--blue);font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;text-transform:none;letter-spacing:0;padding:0;">排序</button>
+    </div>
     <div class="card" id="ov-acct"></div>
   </div>
 
@@ -237,7 +266,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
     <div class="sec-title">投資帳戶</div>
     <div class="card" id="ov-inv"></div>
   </div>
-  <div style="height:20px"></div>
+  <div style="height:80px"></div>
 </div>
 
 <!-- ═══════════ GENERAL ═══════════ -->
@@ -511,7 +540,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
                   style="display:none;padding:8px 12px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">搜尋</button>
         </div>
       </div>
-      <div id="i-fund-results" style="display:none;margin:-4px 0 4px;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;background:#fff;max-height:220px;overflow-y:auto;"></div>
+      <div id="i-fund-results" style="display:none;margin:-4px 0 4px;border:1px solid var(--gray4);border-radius:10px;overflow:hidden;background:var(--surface);max-height:220px;overflow-y:auto;"></div>
       <div class="frow"><label class="flabel">種類</label><select class="finput" id="i-cat" onchange="syncFundSearchUI()"></select></div>
       <div class="frow"><label class="flabel">買/賣</label>
         <select class="finput" id="i-bs"><option value="買">買入</option><option value="賣">賣出</option></select>
@@ -556,6 +585,22 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="sec-title">投資種類</div>
       <div class="fcard" id="cl-inv"></div>
       <div class="add-row" style="margin-top:8px;"><input class="add-input" id="ni-inv" placeholder="新增投資種類" onkeydown="if(event.key==='Enter')addCat('inv')"><button class="add-btn" onclick="addCat('inv')">＋</button></div>
+    </div>
+    <div style="height:16px"></div>
+  </div>
+</div>
+
+<!-- ═══════════ ACCT SORT MODAL ═══════════ -->
+<div class="ov" id="acctSortModal">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-hdr">
+      <button class="m-btn cancel" onclick="closeOv('acctSortModal')">關閉</button>
+      <div class="m-title">帳戶排序</div>
+      <div style="width:44px"></div>
+    </div>
+    <div class="sec">
+      <div class="fcard" id="acct-sort-list"></div>
     </div>
     <div style="height:16px"></div>
   </div>
@@ -721,7 +766,8 @@ let D = {
   fxRates:{ JPY:0.218, USD:32.5, EUR:36.2, HKD:4.17, CNY:4.45 },
   gen:[],
   inv:[],
-  fx:[]
+  fx:[],
+  acctOrder:[]
 };
 
 // ── FIREBASE 設定 ────────────────────────────────────────────
@@ -961,7 +1007,9 @@ function renderOv(){
     }
   });
   const acctEl=el('ov-acct');
-  const ak=Object.keys(acctBal);
+  const rawAk=Object.keys(acctBal);
+  const orderedAk=(D.acctOrder||[]).filter(n=>rawAk.includes(n));
+  const ak=[...orderedAk,...rawAk.filter(n=>!orderedAk.includes(n))];
   acctEl.innerHTML=ak.length===0
     ?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無資料</div>'
     :ak.map(k=>`<div class="crow"><span style="flex:1;font-size:15px;">${k}</span><span style="font-weight:600;font-size:15px;color:${acctBal[k]>=0?'var(--green)':'var(--red)'}">${sign(acctBal[k])}${fmt(acctBal[k])}</span></div>`).join('');
@@ -1192,7 +1240,7 @@ function renderInv(){
     return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--blue);cursor:pointer;" onclick="openManualPrice('${escItem}',${h.cur})">現價 ${h.cur} · 市值 ${fmt(h.mv)} <span style="font-size:10px;">✎</span></div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
   }).join('');
   const txs=[...D.inv].sort((a,b)=>b.date.localeCompare(a.date));
-  el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="openEditInv(${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:#000">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
+  el('inv-list').innerHTML=txs.length===0?'<div class="empty"><div class="empty-ic">📈</div><div class="empty-tx">尚無投資紀錄<br>點擊右下角 ＋ 新增</div></div>':txs.map(t=>`<div class="inv-row" onclick="openEditInv(${t.id})"><div class="inv-name"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span class="inv-title">${t.item}</span><span class="badge ${t.bs==='買'?'b-buy':'b-sell'}">${t.bs}</span></div><div class="inv-sub">${t.date} · ${t.cat}</div><div class="inv-sub">${(+t.qty).toLocaleString()} × $${(+t.price).toFixed(2)}${t.fee>0?' · 手續費 $'+t.fee:''}</div></div><div class="inv-pnl"><div class="inv-val" style="color:var(--text-primary)">${fmt((+t.qty)*(+t.price))}</div><div class="inv-sub" style="text-align:right">總金額</div></div></div>`).join('');
 }
 
 // ── 手動更新現價 ──────────────────────────────────────────────
@@ -1905,6 +1953,56 @@ function fmtLU(type) {
     { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
+// ── ACCT SORT ─────────────────────────────────────────────────
+function openAcctSort() {
+  // 計算現有帳戶餘額以取得帳戶清單
+  const acctBal = {};
+  D.gen.forEach(t => {
+    if (t.itype) acctBal[t.itype] = (acctBal[t.itype]||0) + (+t.inc||0);
+    if (t.etype) acctBal[t.etype] = (acctBal[t.etype]||0) - (+t.exp||0);
+  });
+  const allAccts = Object.keys(acctBal);
+  // 同步 acctOrder：保留已知帳戶的順序，將新帳戶補到末尾
+  const existing = (D.acctOrder||[]).filter(n => allAccts.includes(n));
+  D.acctOrder = [...existing, ...allAccts.filter(n => !existing.includes(n))];
+  renderAcctSortModal();
+  el('acctSortModal').classList.add('on');
+  syncFab();
+}
+
+function renderAcctSortModal() {
+  const list = D.acctOrder || [];
+  const container = el('acct-sort-list');
+  if (!list.length) {
+    container.innerHTML = '<div class="cat-item" style="color:var(--gray);font-size:14px;">尚無帳戶資料</div>';
+    return;
+  }
+  container.innerHTML = list.map((name, i) =>
+    `<div class="cat-item"><span class="cat-nm">${name}</span><div style="display:flex;align-items:center;gap:2px;flex-shrink:0;"><button class="sort-btn" onclick="moveAcct(${i},-1)" ${i===0?'disabled':''}>▲</button><button class="sort-btn" onclick="moveAcct(${i},1)" ${i===list.length-1?'disabled':''}>▼</button></div></div>`
+  ).join('');
+}
+
+function moveAcct(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= D.acctOrder.length) return;
+  [D.acctOrder[i], D.acctOrder[j]] = [D.acctOrder[j], D.acctOrder[i]];
+  save();
+  renderAcctSortModal();
+  renderOv();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────
+function toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = next === 'dark' ? '#1C1C1E' : '#F2F2F7';
+}
+
 // ── BOOT ──────────────────────────────────────────────────────
 (async () => {
   try {
@@ -1919,6 +2017,10 @@ function fmtLU(type) {
   // 隱藏 loading 畫面
   const lo = document.getElementById('loading-overlay');
   if (lo) lo.style.display = 'none';
+
+  // 初始化深色模式按鈕圖示
+  const themeBtn = document.getElementById('theme-btn');
+  if (themeBtn) themeBtn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
 
   ovUpdateLbl(); genUpdateLbl(); fxUpdateLbl();
   renderOv(); renderGen(); renderFx(); renderInv();
