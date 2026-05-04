@@ -26,6 +26,8 @@
   --b-buy-bg:#FFE5E5;--b-sell-bg:#E5F5EB;
   --fx-badge-bg:#F0F0FF;
   --info-bg:#EAF4FF;--warn-bg:#FFF5E5;
+  --badge-transfer-bg:#E5F0FF;--badge-transfer-text:#0066CC;
+  --badge-inv-bg:#EEF2FF;--badge-inv-text:#4F46E5;
   /* 底部安全區域（Home Bar）高度 */
   --sab: env(safe-area-inset-bottom, 20px);
   /* Tab bar 總高度 = 內容區 63px + 底部安全區域 */
@@ -43,6 +45,8 @@
   --b-buy-bg:rgba(255,59,48,.2);--b-sell-bg:rgba(52,199,89,.2);
   --fx-badge-bg:rgba(175,82,222,.2);
   --info-bg:rgba(0,122,255,.15);--warn-bg:rgba(255,149,0,.15);
+  --badge-transfer-bg:rgba(0,102,204,.25);--badge-transfer-text:#64A8FF;
+  --badge-inv-bg:rgba(79,70,229,.25);--badge-inv-text:#A5B4FC;
 }
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
@@ -197,6 +201,11 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
 .rate-cur{font-size:15px;font-weight:700;min-width:50px;}
 .rate-val{flex:1;border:none;outline:none;font-size:15px;background:transparent;text-align:right;font-family:inherit;}
 .rate-unit{font-size:13px;color:var(--gray);white-space:nowrap;}
+/* DARK MODE — form element overrides (desktop browsers need explicit bg, not just transparent) */
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{
+  background-color:var(--surface);color:var(--text-primary);color-scheme:dark;
+}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:var(--gray3);}
 </style>
 <script>
 (function(){
@@ -623,7 +632,7 @@ select.finput{-webkit-appearance:none;cursor:pointer;}
       <div class="sec-title">你的同步代碼</div>
       <div class="fcard">
         <div class="frow" style="gap:8px;align-items:flex-start;padding:14px 16px;">
-          <div id="sync-code-display" style="flex:1;font-size:12px;font-family:monospace;color:#333;word-break:break-all;line-height:1.8;"></div>
+          <div id="sync-code-display" style="flex:1;font-size:12px;font-family:monospace;color:var(--text-primary);word-break:break-all;line-height:1.8;"></div>
           <button onclick="copySyncCode()" style="flex-shrink:0;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;">複製</button>
         </div>
       </div>
@@ -1075,9 +1084,9 @@ function renderGen(){
       else if(e>0) amt=`<div class="t-exp">−${fmt(e)}</div>`;
       const sub=[t.cat,t.itype?'收：'+t.itype:'',t.etype?'支：'+t.etype:''].filter(Boolean).join(' · ');
       if(t.linked==='transfer'){
-        html+=`<div class="tx" onclick="openEditTransfer(${t.id})"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:#E5F0FF;color:#0066CC;border-radius:4px;padding:1px 5px;margin-right:4px;">轉帳</span>${t.item}</div><div class="tx-sub">${t.etype} → ${t.itype}</div></div><div class="tx-right"><div style="font-size:14px;font-weight:600;color:var(--blue)">${fmt(+t.inc)}</div></div></div>`;
+        html+=`<div class="tx" onclick="openEditTransfer(${t.id})"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:var(--badge-transfer-bg);color:var(--badge-transfer-text);border-radius:4px;padding:1px 5px;margin-right:4px;">轉帳</span>${t.item}</div><div class="tx-sub">${t.etype} → ${t.itype}</div></div><div class="tx-right"><div style="font-size:14px;font-weight:600;color:var(--blue)">${fmt(+t.inc)}</div></div></div>`;
       } else if(t.linked){
-        html+=`<div class="tx" style="opacity:.6;cursor:default"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:#EEF2FF;color:#4F46E5;border-radius:4px;padding:1px 5px;margin-right:4px;">投資轉帳</span>${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
+        html+=`<div class="tx" style="opacity:.6;cursor:default"><div class="tx-ic">🔄</div><div class="tx-main"><div class="tx-name"><span style="font-size:11px;background:var(--badge-inv-bg);color:var(--badge-inv-text);border-radius:4px;padding:1px 5px;margin-right:4px;">投資轉帳</span>${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
       } else {
         html+=`<div class="tx" onclick="openEditGen(${t.id})"><div class="tx-ic">${ico(t.cat)}</div><div class="tx-main"><div class="tx-name">${t.item}</div><div class="tx-sub">${sub}</div></div><div class="tx-right">${amt}</div></div>`;
       }
@@ -1237,7 +1246,7 @@ function renderInv(){
   el('inv-hold').innerHTML=Object.keys(holds).length===0?'<div class="crow" style="color:var(--gray);font-size:14px;">尚無持倉</div>':Object.values(holds).map(h=>{
     const sym=toYahooSym(h.item,h.cat,h.ticker);
     const displaySym=sym||h.ticker||'';
-    const tickerTag=displaySym?`<span style="font-size:11px;background:#F0F0FF;color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${displaySym}</span>`:``;
+    const tickerTag=displaySym?`<span style="font-size:11px;background:var(--fx-badge-bg);color:var(--purple);border-radius:6px;padding:1px 6px;margin-left:4px;">${displaySym}</span>`:``;
     const escItem=h.item.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<div class="inv-row"><div class="inv-name"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:2px;"><span class="inv-title">${h.item}</span>${tickerTag}</div><div class="inv-sub">${h.cat} · ${h.qty.toLocaleString()} 股/單位 · 均價 ${h.avg.toFixed(2)}</div><div class="inv-sub" style="color:var(--blue);cursor:pointer;" onclick="openManualPrice('${escItem}',${h.cur})">現價 ${h.cur} · 市值 ${fmt(h.mv)} <span style="font-size:10px;">✎</span></div></div><div class="inv-pnl"><div class="inv-val ${h.pnl>=0?'pos':'neg'}">${sign(h.pnl)}${fmt(h.pnl)}</div><div class="inv-pct ${h.pct>=0?'pos':'neg'}">${sign(h.pct)}${h.pct.toFixed(2)}%</div></div></div>`;
   }).join('');
@@ -1859,7 +1868,7 @@ async function openFundSearch() {
                代號驗證失敗——請確認代號正確，或 MoneyDJ 暫時無法存取（稍後再試）
              </div>`;
         resEl.innerHTML = `<div style="padding:12px 14px;font-size:13px;line-height:1.8">
-          <div style="color:#555">找不到「${name.replace(/</g,'&lt;')}」的搜尋結果</div>
+          <div style="color:var(--text-primary)">找不到「${name.replace(/</g,'&lt;')}」的搜尋結果</div>
           ${hint}
           <a href="${mdUrl}" target="_blank" rel="noopener"
              style="display:inline-block;margin-top:8px;padding:6px 14px;background:var(--blue);
@@ -1878,9 +1887,9 @@ async function openFundSearch() {
       const nm = r.name.replace(/</g, '&lt;');
       const cd = r.code.replace(/'/g, '\\\'');
       return `<div onclick="selectFundResult('${cd}')"
-                   style="padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;display:flex;gap:8px;align-items:baseline;font-size:13px;">
+                   style="padding:10px 14px;border-bottom:1px solid var(--gray5);cursor:pointer;display:flex;gap:8px;align-items:baseline;font-size:13px;">
         <span style="font-weight:700;color:var(--blue);flex-shrink:0">${r.code}</span>
-        <span style="color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</span>
+        <span style="color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</span>
         <span style="font-size:11px;color:var(--gray);flex-shrink:0">${r.type||''}</span>
       </div>`;
     }).join('');
